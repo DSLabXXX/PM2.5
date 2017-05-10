@@ -1,0 +1,11 @@
+#!/bin/bash
+
+file_path=/home/clliao/workspace/python/weather_prediction/ensemble_regression/statistic.py
+month_list=1
+hr=8
+target_kind=O3
+pred_kind=ave
+for site in 板橋 中山 新竹 苗栗 忠明 西屯 斗六 嘉義 左營 小港
+do
+    python $file_path $site
+done

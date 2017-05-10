@@ -1,0 +1,13 @@
+#!/bin/bash
+
+for month in 1 4 7
+do
+    if [ $month == 1 ]; then
+        echo $month
+    elif [ $month == 4 ]; then
+        echo $month
+    else
+        echo $month
+    fi
+done
+

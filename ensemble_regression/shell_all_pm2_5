@@ -1,0 +1,245 @@
+#!/bin/bash
+
+file_path=/home/clliao/workspace/python/weather_prediction/ensemble_regression/mainPM2_5.py
+training_year=2014-2015
+testing_year=2015-2015
+training_duration=1/1-11/30
+testing_duration=12/1-12/31
+is_training=True
+for month in 1
+do
+    if [ $month == "1" ]; then
+        echo test_month_"$month"
+        training_year=2014-2016
+        testing_year=2017-2017
+        training_duration=1/1-12/31
+        testing_duration=1/1-1/31
+    elif [ $month == "2" ]; then
+        echo test_month_"$month"
+        training_year=2014-2015
+        testing_year=2015-2015
+        training_duration=1/1-1/31
+        testing_duration=2/1-2/28
+    elif [ $month == "4" ]; then
+        echo test_month_"$month"
+        training_year=2014-2015
+        testing_year=2015-2015
+        training_duration=1/1-3/31
+        testing_duration=4/1-4/30
+    elif [ $month == "7" ]; then
+        echo test_month_"$month"
+        training_year=2014-2015
+        testing_year=2015-2015
+        training_duration=1/1-6/30
+        testing_duration=7/1-7/31
+    elif [ $month == "10" ]; then
+        echo test_month_"$month"
+        training_year=2014-2015
+        testing_year=2015-2015
+        training_duration=1/1-9/30
+        testing_duration=10/1-10/31
+    elif [ $month == "11" ]; then
+        echo test_month_"$month"
+        training_year=2014-2015
+        testing_year=2015-2015
+        training_duration=1/1-10/31
+        testing_duration=11/1-11/30
+    elif [ $month == "12" ]; then
+        echo test_month_"$month"
+        training_year=2014-2015
+        testing_year=2015-2015
+        training_duration=1/1-11/30
+        testing_duration=12/1-12/31
+    else
+        echo month error
+    fi
+    local=北部
+    city=新北
+    for site in 土城 新店 新莊 板橋 林口 汐止 菜寮 萬里
+    do
+        for interval in 1 6 12
+        do
+	    echo $file_path
+	    python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+	    #echo rnn_"$site_name"_"$month"
+        done
+    done
+    city=台北
+    for site in 中山 古亭 士林 松山 萬華
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=基隆
+    for site in 基隆
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=桃園
+    for site in 大園 平鎮 桃園 龍潭
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    local=竹苗
+    city=新竹
+    for site in 新竹 湖口 竹東
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=苗栗
+    for site in 苗栗 三義
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    local=中部
+    city=台中
+    for site in 大里 忠明 沙鹿 西屯 豐原
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=彰化
+    for site in 二林 彰化
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=南投
+    for site in 南投 竹山
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    local=雲嘉南
+    city=嘉義
+    for site in 嘉義 新港 朴子
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=雲林
+    for site in 崙背 斗六 竹山
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=台南
+    for site in 善化 安南 新營 臺南
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    local=高屏
+    city=高雄
+    for site in 仁武 前金 大寮 小港 左營 林園 楠梓 美濃
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=屏東
+    for site in 屏東 恆春 潮州
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    local=宜蘭
+    city=宜蘭
+    for site in 冬山 宜蘭
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    local=花東
+    city=花蓮
+    for site in 花蓮
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=台東
+    for site in 臺東
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    local=西部離島
+    city=金門
+    for site in 金門
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=連江
+    for site in 馬祖
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+    city=澎湖
+    for site in 馬公
+    do
+        for interval in 1 6 12
+        do
+            echo $file_path
+            python $file_path $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+        done
+    done
+done
