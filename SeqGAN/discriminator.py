@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
+
 # An alternative to tf.nn.rnn_cell._linear function, which has been removed in Tensorfow 1.0.1
 # The highway layer is borrowed from https://github.com/mkroutikov/tf-lstm-char-cnn
 def linear(input_, output_size, scope=None):
@@ -31,6 +32,7 @@ def linear(input_, output_size, scope=None):
 
     return tf.matmul(input_, tf.transpose(matrix)) + bias_term
 
+
 def highway(input_, size, num_layers=1, bias=-2.0, f=tf.nn.relu, scope='Highway'):
     """Highway Network (cf. http://arxiv.org/abs/1505.00387).
     t = sigmoid(Wy + b)
@@ -49,23 +51,15 @@ def highway(input_, size, num_layers=1, bias=-2.0, f=tf.nn.relu, scope='Highway'
 
     return output
 
+
 class Discriminator(object):
     """
     A CNN for text classification.
     Uses an embedding layer, followed by a convolutional, max-pooling and softmax layer.
-    Args:
-      sequence_length: the length of a sequence
-      num_classes: the dimensionality of output vector, i.e., number of classes
-      vocab_size: the number of vocabularies
-      embedding_size: the dimensionality of an embedding vector
-      filter_sizes: filter size
-      num_filters: number of filter
-      l2_reg_lambda: lambda, a parameter for L2 regularizer
     """
 
-    def __init__(
-            self, sequence_length, num_classes, vocab_size,
-            embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
+    def __init__(self, sequence_length, num_classes, vocab_size,
+                 embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
@@ -73,20 +67,9 @@ class Discriminator(object):
 
         # Keeping track of l2 regularization loss (optional)
         l2_loss = tf.constant(0.0)
-        
-        with tf.variable_scope('discriminator'):
 
+        with tf.variable_scope('discriminator'):
             # Embedding layer
-            #
-            # MAX_SEQUENCE_LENGTH = 30
-            # self.W = tf.Variable(tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0), name="W")
-            # self.W = Embedding(vocab_size,
-            #                    embedding_size,
-            #                    weights=[tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0)],
-            #                    input_length=MAX_SEQUENCE_LENGTH,
-            #                    trainable=False)
-            # self.embedded_chars = self.W(self.input)
-            # -----------------------------------------------
             with tf.device('/cpu:0'), tf.name_scope("embedding"):
                 self.W = tf.Variable(
                     tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0),
@@ -98,30 +81,32 @@ class Discriminator(object):
             pooled_outputs = []
             for filter_size, num_filter in zip(filter_sizes, num_filters):
                 with tf.name_scope("conv-maxpool-%s" % filter_size):
-
                     # Convolution Layer
                     filter_shape = [filter_size, embedding_size, 1, num_filter]
                     W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1), name="W")
                     b = tf.Variable(tf.constant(0.1, shape=[num_filter]), name="b")
-                    conv = tf.nn.conv2d(
-                        self.embedded_chars_expanded,
-                        W,
-                        strides=[1, 1, 1, 1],
-                        padding="VALID",
-                        name="conv")
+                    conv = tf.nn.conv2d(self.embedded_chars_expanded,
+                                        W,
+                                        strides=[1, 1, 1, 1],
+                                        padding="VALID",
+                                        name="conv")
+
+                    # Batch Normalization
+                    bn = tf.contrib.layers.batch_norm(conv,
+                                                      center=True, scale=True,
+                                                      is_training=True)
 
                     # Apply nonlinearity
-                    h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
+                    h = tf.nn.relu(tf.nn.bias_add(bn, b), name="relu")
 
                     # Maxpooling over the outputs
-                    pooled = tf.nn.max_pool(
-                        h,
-                        ksize=[1, sequence_length - filter_size + 1, 1, 1],
-                        strides=[1, 1, 1, 1],
-                        padding='VALID',
-                        name="pool")
+                    pooled = tf.nn.max_pool(h,
+                                            ksize=[1, sequence_length - filter_size + 1, 1, 1],
+                                            strides=[1, 1, 1, 1],
+                                            padding='VALID',
+                                            name="pool")
                     pooled_outputs.append(pooled)
-            
+
             # Combine all the pooled features
             num_filters_total = sum(num_filters)
             self.h_pool = tf.concat(pooled_outputs, 3)
@@ -147,10 +132,12 @@ class Discriminator(object):
 
             # CalculateMean cross-entropy loss
             with tf.name_scope("loss"):
-                losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
+                softmax_with_logits = tf.nn.softmax(logits=self.scores)
+                losses = -softmax_with_logits * self.input_y
+                # losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
                 self.loss = tf.reduce_mean(losses) + l2_reg_lambda * l2_loss
 
         self.params = [param for param in tf.trainable_variables() if 'discriminator' in param.name]
         d_optimizer = tf.train.AdamOptimizer(1e-4)
         grads_and_vars = d_optimizer.compute_gradients(self.loss, self.params, aggregation_method=2)
-        self.train_op = d_optimizer.apply_gradients(grads_and_vars)
+        self.  train_op = d_optimizer.apply_gradients(grads_and_vars)
