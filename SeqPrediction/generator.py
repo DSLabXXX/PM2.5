@@ -63,8 +63,6 @@ class Generator(object):
         # ----------------------------------------------------------------------------
         gen_o = tensor_array_ops.TensorArray(dtype=tf.float32, size=self.sequence_length_2,
                                              dynamic_size=False, infer_shape=True)
-        gen_x = tensor_array_ops.TensorArray(dtype=tf.float32, size=self.sequence_length_2,
-                                             dynamic_size=False, infer_shape=True)
         # ----------------------------------------------------------------------------
 
         def _e_recurrence(i, x_t, h_tm1):
@@ -82,7 +80,7 @@ class Generator(object):
         #
         # Forward prediction to predict the sequence from (t+1) to T (predict by prediction)
         # ----------------------------------------------------------------------------
-        def _g_recurrence(i, x_t, embed_vec, h_tm1, gen_o, gen_x):
+        def _g_recurrence(i, x_t, embed_vec, h_tm1, gen_o):
             # Def:
             #   LSTM forward operation unit, where output at (t-1) will be sent as input at t
             #   This function is used prediction time slice from (t+1) to T
@@ -111,25 +109,26 @@ class Generator(object):
 
             x_tp1 = o_t
 
-            gen_o = gen_o.write(i, tf.reduce_sum(o_t, axis=1))
+            o_t = tf.multinomial(o_t, 1)
+            o_t = tf.reshape(o_t, [self.batch_size])
 
             # [indices, batch_size]
-            gen_x = gen_x.write(i, o_t)
+            gen_o = gen_o.write(i, o_t)
 
-            return i + 1, x_tp1, embed_vec, h_t, gen_o, gen_x
+            return i + 1, x_tp1, embed_vec, h_t, gen_o
 
-        _, _, _, _, self.gen_o, self.gen_x = control_flow_ops.while_loop(
-            cond=lambda i, _1, _2, _3, _4, _5: i < self.sequence_length_2,
+        _, _, _, _, self.gen_o = control_flow_ops.while_loop(
+            cond=lambda i, _1, _2, _3, _4: i < self.sequence_length_2,
             body=_g_recurrence,  # forward prediction
             loop_vars=(tf.constant(0, dtype=tf.int32),
                        self.start_token, embed_vec,
-                       self.h2_0, gen_o, gen_x))
+                       self.h2_0, gen_o))
 
         # dim(self.gen_x) = (seq_length, batch_size)
-        self.gen_x = self.gen_x.stack()
+        self.gen_o = self.gen_o.stack()
 
         # dim(self.gen_x) = (batch_size, seq_length)
-        self.gen_x = tf.transpose(self.gen_x, perm=[1, 0])
+        self.gen_o = tf.transpose(self.gen_o, perm=[1, 0])
 
         # supervised pre-training for generator
         g_predictions = tensor_array_ops.TensorArray(dtype=tf.float32,
@@ -145,7 +144,7 @@ class Generator(object):
                                                 size=self.sequence_length_2)
         ta_emb_x = ta_emb_x.unstack(self.processed_x)
 
-        def _pretrain_recurrence(i, x_t, h_tm1, g_predictions):
+        def _pretrain_recurrence(i, x_t, embed_vec, h_tm1, g_predictions):
             # Def:
             #   LSTM forward operation unit, given input and output
             #   This function is used prediction time slice from 1 to t
@@ -162,7 +161,7 @@ class Generator(object):
 
             #   h_tm1: the previous tensor that packs [prev_hidden_state, prev_c]
             #   h_t: the current tensor that packs [now_hidden_state, now_c]
-            h_t = self.g_recurrent_unit_2(x_t, h_tm1)
+            h_t = self.g_recurrent_unit_2(tf.concat([x_t, embed_vec], 1), h_tm1)
 
             # LSTM output
             # h_t: the current tensor that packs [now_hidden_state, now_c]
@@ -173,13 +172,14 @@ class Generator(object):
             g_predictions = g_predictions.write(i, o_t)
 
             x_tp1 = ta_emb_x.read(i)
-            return i + 1, x_tp1, h_t, g_predictions
+            return i + 1, x_tp1, embed_vec, h_t, g_predictions
 
-        _, _, _, self.g_predictions = control_flow_ops.while_loop(cond=lambda i, _1, _2, _3: i < self.sequence_length_2,
-                                                                  body=_pretrain_recurrence,  # forward prediction
-                                                                  loop_vars=(tf.constant(0, dtype=tf.int32),
-                                                                             self.start_token,
-                                                                             self.h2_0, g_predictions))
+        _, _, _, _, self.g_predictions = control_flow_ops.while_loop(
+            cond=lambda i, _1, _2, _3, _4: i < self.sequence_length_2,
+            body=_pretrain_recurrence,  # forward prediction
+            loop_vars=(tf.constant(0, dtype=tf.int32),
+                       self.start_token, embed_vec,
+                       self.h2_0, g_predictions))
         # dim(self.g_predictions) = (batch_size, seq_length, vocab_size)
         self.g_predictions = tf.transpose(self.g_predictions.stack(), perm=[1, 0, 2])
 
