@@ -54,7 +54,7 @@ def highway(input_, size, num_layers=1, bias=-2.0, f=tf.nn.relu, scope='Highway'
 
 class Discriminator(object):
     """
-    A CNN for text classification.
+    A CNN for sequence classification.
     Uses an embedding layer, followed by a convolutional, max-pooling and softmax layer.
     """
 
@@ -140,4 +140,4 @@ class Discriminator(object):
         self.params = [param for param in tf.trainable_variables() if 'discriminator' in param.name]
         d_optimizer = tf.train.AdamOptimizer(1e-4)
         grads_and_vars = d_optimizer.compute_gradients(self.loss, self.params, aggregation_method=2)
-        self.  train_op = d_optimizer.apply_gradients(grads_and_vars)
+        self.train_op = d_optimizer.apply_gradients(grads_and_vars)
