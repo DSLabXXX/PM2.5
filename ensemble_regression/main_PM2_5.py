@@ -72,31 +72,31 @@ pollution_site_map = {
 high_alert = 53.5
 low_alert = 35.5
 
-# local = '宜蘭'
-# city = '宜蘭'
-# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-# target_site = '宜蘭'
+local = '北部'
+city = '台北'
+site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+target_site = '中山'
+
+training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = ['2017', '2017']
+
+training_duration = ['1/1', '12/31']
+testing_duration = ['1/1', '1/31']
+interval_hours = 6  # predict the label of average data of many hours later, default is 1
+is_training = True
+
+# local = os.sys.argv[1]
+# city = os.sys.argv[2]
+# site_list = pollution_site_map[local][city]
+# target_site = os.sys.argv[3]
 #
-# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = ['2017', '2017']
+# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
 #
-# training_duration = ['1/1', '12/31']
-# testing_duration = ['1/1', '1/31']
-# interval_hours = 6  # predict the label of average data of many hours later, default is 1
-# is_training = True
-
-local = os.sys.argv[1]
-city = os.sys.argv[2]
-site_list = pollution_site_map[local][city]
-target_site = os.sys.argv[3]
-
-training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
-
-training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
 
 target_kind = 'PM2.5'
 # target_kind = 'O3'
@@ -118,13 +118,12 @@ for i in range(rangeofYear):
 # Training Parameters
 # WIND_DIREC is a specific feature, that need to be processed, and it can only be element of input vector now.
 if target_kind == 'PM2.5':
-    pollution_kind = ['PM2.5', 'O3', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC']
+    pollution_kind = ['PM2.5', 'O3', 'WIND_SPEED', 'WIND_DIREC']  # , 'AMB_TEMP', 'RH'
 elif target_kind == 'O3':
     pollution_kind = ['O3', 'NOx', 'WIND_SPEED', 'WIND_DIREC']
 data_update = False
 # batch_size = 24 * 7
 seed = 0
-
 
 # Network Parameters
 input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC' in pollution_kind else (len(site_list)*len(pollution_kind))
@@ -186,6 +185,7 @@ if is_training:
     # reading data
     print('Reading data .. ')
     start_time = time.time()
+    initial_time = time.time()
     print('preparing training set ..')
     X_train = read_data_sets(sites=site_list+[target_site], date_range=np.atleast_1d(training_year),
                              beginning=training_duration[0], finish=training_duration[-1],
@@ -247,12 +247,12 @@ if is_training:
             for j in range(len_of_sites_list):
                 specific_index = index_of_kind + j * length_of_kind_list
                 coordin = data_coordinate_angle((X_train[i].pop(specific_index+j))*std_X_train[specific_index]+mean_X_train[specific_index])
-                X_train[i].insert(specific_index, coordin[1])
-                X_train[i].insert(specific_index, coordin[0])
+                X_train[i].insert(specific_index + j, coordin[1])
+                X_train[i].insert(specific_index + j, coordin[0])
                 if i < len(X_test):
                     coordin = data_coordinate_angle((X_test[i].pop(specific_index+j))*std_X_train[specific_index]+mean_X_train[specific_index])
-                    X_test[i].insert(specific_index, coordin[1])
-                    X_test[i].insert(specific_index, coordin[0])
+                    X_test[i].insert(specific_index + j, coordin[1])
+                    X_test[i].insert(specific_index + j, coordin[0])
         X_train = np.array(X_train)
         X_test = np.array(X_test)
     Y_test = np.array(Y_test, dtype=np.float)
@@ -536,31 +536,34 @@ for element in range(len(Y_test)):
 print('\n- ensemble -')
 filename = ("ensemble_%s_training_%s_m%s_to_%s_m%s_interval_%s"
             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
-filename2 = ("classification_%s_training_%s_m%s_to_%s_m%s_interval_%s"
-             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
+# filename2 = ("classification_%s_training_%s_m%s_to_%s_m%s_interval_%s"
+#              % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
 
 if is_training:
     ensemble_model = xgb.XGBRegressor().fit(ensemble_X_train, Y_train)
-    classification_model = xgb.XGBClassifier().fit(ensemble_X_train, Y_alert_train)
+    # classification_model = xgb.XGBClassifier().fit(ensemble_X_train, Y_alert_train)
 
     fw = open(folder + filename, 'wb')
     cPickle.dump(ensemble_model, fw)
     fw.close()
 
-    fw2 = open(folder + filename2, 'wb')
-    cPickle.dump(classification_model, fw2)
-    fw2.close()
+    final_time = time.time()
+    time_spent_printer(initial_time, final_time)
+
+    # fw2 = open(folder + filename2, 'wb')
+    # cPickle.dump(classification_model, fw2)
+    # fw2.close()
 else:
     fr = open(folder + filename, 'rb')
     ensemble_model = cPickle.load(fr)
     fr.close()
 
-    fr2 = open(folder + filename2, 'rb')
-    classification_model = cPickle.load(fr2)
-    fr2.close()
+    # fr2 = open(folder + filename2, 'rb')
+    # classification_model = cPickle.load(fr2)
+    # fr2.close()
 
 pred = ensemble_model.predict(ensemble_X_test)
-alert_pred = classification_model.predict(ensemble_X_test)
+# alert_pred = classification_model.predict(ensemble_X_test)
 
 # --
 
@@ -569,145 +572,161 @@ predictions = mean_y_train + std_y_train * pred
 print('rmse: %.5f' % (np.mean((Y_test - predictions)**2, 0)**0.5))
 
 
-def target_level(target, kind='PM2.5'):
-    # target should be a 1d-list
-    if kind == 'PM2.5':
-        if (target >= 0) and (target < 11.5):                # 0-11
-            return 1
-        elif (target >= 11.5) and (target < 23.5):           # 12-23
-            return 2
-        elif (target >= 23.5) and (target < 35.5):           # 24-35
-            return 3
-        elif (target >= 35.5) and (target < 41.5):           # 36-41
-            return 4
-        elif (target >= 41.5) and (target < 47.5):           # 42-47
-            return 5
-        elif (target >= 47.5) and (target < 53.5):           # 48-53
-            return 6
-        elif (target >= 53.5) and (target < 58.5):           # 54-58
-            return 7
-        elif (target >= 58.5) and (target < 64.5):           # 59-64
-            return 8
-        elif (target >= 64.5) and (target < 70.5):           # 65-70
-            return 9
-        elif target >= 70.5:                                                # others(71+)
-            return 10
-        else:
-            print('error value: %d' % target)
-            return 1
-
-pred_label = np.zeros(len(predictions))
-real_target = np.zeros(len(Y_test))
-
-pred_label_true = 0.
-pred_label_false = 0.
-
-four_label_true = 0.0
-four_label_false = 0.0
-
-# calculate the accuracy of ten level
-for i in range(len(predictions)):
-    pred_label[i] = target_level(predictions[i])
-    real_target[i] = target_level(Y_test[i])
-
-    if real_target[i] == pred_label[i]:
-        pred_label_true += 1
-    else:
-        pred_label_false += 1
-
-    # four label
-    if (real_target[i] >= 1 and real_target[i] <= 3) and (pred_label[i] >= 1 and pred_label[i] <= 3):
-        four_label_true += 1
-    elif (real_target[i] >= 4 and real_target[i] <= 6) and (pred_label[i] >= 4 and pred_label[i] <= 6):
-        four_label_true += 1
-    elif (real_target[i] >= 7 and real_target[i] <= 9) and (pred_label[i] >= 7 and pred_label[i] <= 9):
-        four_label_true += 1
-    elif (real_target[i] >= 10) and (pred_label[i] >= 10):
-        four_label_true += 1
-    else:
-        four_label_false += 1
+# def target_level(target, kind='PM2.5'):
+#     # target should be a 1d-list
+#     if kind == 'PM2.5':
+#         if (target >= 0) and (target < 11.5):                # 0-11
+#             return 1
+#         elif (target >= 11.5) and (target < 23.5):           # 12-23
+#             return 2
+#         elif (target >= 23.5) and (target < 35.5):           # 24-35
+#             return 3
+#         elif (target >= 35.5) and (target < 41.5):           # 36-41
+#             return 4
+#         elif (target >= 41.5) and (target < 47.5):           # 42-47
+#             return 5
+#         elif (target >= 47.5) and (target < 53.5):           # 48-53
+#             return 6
+#         elif (target >= 53.5) and (target < 58.5):           # 54-58
+#             return 7
+#         elif (target >= 58.5) and (target < 64.5):           # 59-64
+#             return 8
+#         elif (target >= 64.5) and (target < 70.5):           # 65-70
+#             return 9
+#         elif target >= 70.5:                                                # others(71+)
+#             return 10
+#         else:
+#             print('error value: %d' % target)
+#             return 1
+#
+# # pred_label = np.zeros(len(predictions))
+# # real_target = np.zeros(len(Y_test))
+#
+# # pred_label_true = 0.
+# # pred_label_false = 0.
+#
+# # four_label_true = 0.0
+# # four_label_false = 0.0
+#
+# # calculate the accuracy of ten level
+# # for i in range(len(predictions)):
+# #     pred_label[i] = target_level(predictions[i])
+# #     real_target[i] = target_level(Y_test[i])
+# #
+# #     if real_target[i] == pred_label[i]:
+# #         pred_label_true += 1
+# #     else:
+# #         pred_label_false += 1
+#
+#     # four label
+#     # if (real_target[i] >= 1 and real_target[i] <= 3) and (pred_label[i] >= 1 and pred_label[i] <= 3):
+#     #     four_label_true += 1
+#     # elif (real_target[i] >= 4 and real_target[i] <= 6) and (pred_label[i] >= 4 and pred_label[i] <= 6):
+#     #     four_label_true += 1
+#     # elif (real_target[i] >= 7 and real_target[i] <= 9) and (pred_label[i] >= 7 and pred_label[i] <= 9):
+#     #     four_label_true += 1
+#     # elif (real_target[i] >= 10) and (pred_label[i] >= 10):
+#     #     four_label_true += 1
+#     # else:
+#     #     four_label_false += 1
 
 # print('standard_prob_accuracy: %.5f' % (standard_prob_true / (standard_prob_true + standard_prob_false)))
-print('Ten level accuracy: %.5f' % (pred_label_true / (pred_label_true + pred_label_false)))
-print('Four level accuracy: %.5f' % (four_label_true / (four_label_true + four_label_false)))
-print('--')
+# print('Ten level accuracy: %.5f' % (pred_label_true / (pred_label_true + pred_label_false)))
+# print('Four level accuracy: %.5f' % (four_label_true / (four_label_true + four_label_false)))
+# print('--')
 
 # --
 
-ha = 0.0  # observation high, predict high
-hb = 0.0  # observation low, predict high
-hc = 0.0  # observation high, predict low
-hd = 0.0  # observation low, predict low
-la = 0.0  # observation very high, predict very high
-lb = 0.0
-lc = 0.0
-ld = 0.0
-alert_a = 0.0
-alert_b = 0.0
-alert_c = 0.0
-alert_d = 0.0
-integration_a = 0.0
-integration_b = 0.0
-integration_c = 0.0
-integration_d = 0.0
-
-for each_value in range(len(Y_test)):
-    if Y_test[each_value] >= high_alert:  # observation high
-        # regression
-        if predictions[each_value] >= high_alert:  # forecast high(with tolerance)
-            ha += 1
-        else:
-            hc += 1
-
-        # classification
-        if alert_pred[each_value]:  # [1, 0] = [high, low]
-            alert_a += 1
-        else:
-            alert_c += 1
-
-        # integration
-        if alert_pred[each_value] or (predictions[each_value] >= high_alert):
-            integration_a += 1
-        else:
-            integration_c += 1
-
-    else:  # observation low
-        # regression
-        if predictions[each_value] >= high_alert:
-            hb += 1
-        else:
-            hd += 1
-
-        # classification
-        if alert_pred[each_value]:
-            alert_b += 1
-        else:
-            alert_d += 1
-
-        # integration
-        if alert_pred[each_value] or (predictions[each_value] >= high_alert):
-            integration_b += 1
-        else:
-            integration_d += 1
-
-    # --------------------------------------------------------
-
-    if Y_test[each_value] >= low_alert:  # observation higher
-        if predictions[each_value] >= low_alert:
-            la += 1
-        else:
-            lc += 1
-    else:  # observation very low
-        if predictions[each_value] >= low_alert:
-            lb += 1
-        else:
-            ld += 1
+# ha = 0.0  # observation high, predict high
+# hb = 0.0  # observation low, predict high
+# hc = 0.0  # observation high, predict low
+# hd = 0.0  # observation low, predict low
+# la = 0.0  # observation very high, predict very high
+# lb = 0.0
+# lc = 0.0
+# ld = 0.0
+# # alert_a = 0.0
+# # alert_b = 0.0
+# # alert_c = 0.0
+# # alert_d = 0.0
+# # integration_a = 0.0
+# # integration_b = 0.0
+# # integration_c = 0.0
+# # integration_d = 0.0
+#
+# for each_value in range(len(Y_test)):
+#     if Y_test[each_value] >= high_alert:  # observation high
+#         # regression
+#         if predictions[each_value] >= high_alert:  # forecast high(with tolerance)
+#             ha += 1
+#         else:
+#             hc += 1
+#
+#         # classification
+#         # if alert_pred[each_value]:  # [1, 0] = [high, low]
+#         #     alert_a += 1
+#         # else:
+#         #     alert_c += 1
+#
+#         # integration
+#         # if alert_pred[each_value] or (predictions[each_value] >= high_alert):
+#         #     integration_a += 1
+#         # else:
+#         #     integration_c += 1
+#
+#     else:  # observation low
+#         # regression
+#         if predictions[each_value] >= high_alert:
+#             hb += 1
+#         else:
+#             hd += 1
+#
+#         # classification
+#         # if alert_pred[each_value]:
+#         #     alert_b += 1
+#         # else:
+#         #     alert_d += 1
+#
+#         # integration
+#         # if alert_pred[each_value] or (predictions[each_value] >= high_alert):
+#         #     integration_b += 1
+#         # else:
+#         #     integration_d += 1
+#
+#     # --------------------------------------------------------
+#
+#     if Y_test[each_value] >= low_alert:  # observation higher
+#         if predictions[each_value] >= low_alert:
+#             la += 1
+#         else:
+#             lc += 1
+#     else:  # observation very low
+#         if predictions[each_value] >= low_alert:
+#             lb += 1
+#         else:
+#             ld += 1
 
 
 # print('Two level accuracy: %f' % (two_label_true / (two_label_true + two_label_false)))
-print('high label: (%d, %d, %d, %d)' % (ha, hb, hc, hd))
-print('low label: (%d, %d, %d, %d)' % (la, lb, lc, ld))
-print('alert: (%d, %d, %d, %d)' % (alert_a, alert_b, alert_c, alert_d))
+# print('high label: (%d, %d, %d, %d)' % (ha, hb, hc, hd))
+# print('low label: (%d, %d, %d, %d)' % (la, lb, lc, ld))
+# print('alert: (%d, %d, %d, %d)' % (alert_a, alert_b, alert_c, alert_d))
+# print('alert_integration: %d, %d, %d, %d' % (integration_a, integration_b, integration_c, integration_d))
+#
+# try:
+#     print('precision: %f' % (integration_a / (integration_a + integration_b)))
+# except:
+#     print('precision: -1')
+# try:
+#     print('recall: %f' % (integration_a / (integration_a + integration_c)))
+# except:
+#     print('recall: -1')
+# try:
+#     print('f1 score:, %f' % (
+#         (2 * (integration_a / (integration_a + integration_b)) * (integration_a / (integration_a + integration_c))) / (
+#         (integration_a / (integration_a + integration_b)) + (integration_a / (integration_a + integration_c)))))
+# except:
+#     print('f1 score: -1')
 
 plt.plot(np.arange(len(predictions)), Y_test[:len(predictions)], c='gray')
 plt.plot(np.arange(len(predictions)), predictions, color='pink')
@@ -724,36 +743,36 @@ if True:  # is_training:
     with open(root_path + 'result/%s/%s/%s/%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.ods' % (local, city, target_kind, target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), 'wt') as f:
         print('RMSE: %f' % (np.sqrt(np.mean((Y_test - predictions)**2))), file=f)
         f.write('\n')
-        print('Ten level accuracy: %f' % (pred_label_true / (pred_label_true + pred_label_false)), file=f)
-        f.write('\n')
-        print('Four level accuracy: %f' % (four_label_true / (four_label_true + four_label_false)), file=f)
-        f.write('\n')
-        print('alert_classification:, %d, %d, %d, %d' % (alert_a, alert_b, alert_c, alert_d), file=f)
-        f.write('\n')
+        # print('Ten level accuracy: %f' % (pred_label_true / (pred_label_true + pred_label_false)), file=f)
+        # f.write('\n')
+        # print('Four level accuracy: %f' % (four_label_true / (four_label_true + four_label_false)), file=f)
+        # f.write('\n')
+        # print('alert_classification:, %d, %d, %d, %d' % (alert_a, alert_b, alert_c, alert_d), file=f)
+        # f.write('\n')
         # print('Two level accuracy: %f' % (two_label_true / (two_label_true + two_label_false)), file=f)
         # f.write('\n')
-        print('alert_regression:, %d, %d, %d, %d' % (ha, hb, hc, hd), file=f)
-        f.write('\n')
-        print('alert_interation:, %d, %d, %d, %d' % (integration_a, integration_b, integration_c, integration_d), file=f)
-        f.write('\n')
-        print('low label:, %d, %d, %d, %d' % (la, lb, lc, ld), file=f)
-        f.write('\n')
-        try:
-            print('precision:, %f' % (integration_a / (integration_a + integration_b)), file=f)
-        except:
-            print('precision:, -1', file=f)
-        f.write('\n')
-        try:
-            print('recall:, %f' % (integration_a / (integration_a + integration_c)), file=f)
-        except:
-            print('recall:, -1', file=f)
-        f.write('\n')
-        try:
-            print('f1 score:, %f' % ((2 * (integration_a / (integration_a + integration_b)) * (integration_a / (integration_a + integration_c))) / ((integration_a / (integration_a + integration_b)) + (integration_a / (integration_a + integration_c)))),
-                  file=f)
-        except:
-            print('f1 score:, -1', file=f)
-        f.write('\n')
+        # print('alert_regression:, %d, %d, %d, %d' % (ha, hb, hc, hd), file=f)
+        # f.write('\n')
+        # print('alert_integration:, %d, %d, %d, %d' % (integration_a, integration_b, integration_c, integration_d), file=f)
+        # f.write('\n')
+        # print('low label:, %d, %d, %d, %d' % (la, lb, lc, ld), file=f)
+        # f.write('\n')
+        # try:
+        #     print('precision:, %f' % (integration_a / (integration_a + integration_b)), file=f)
+        # except:
+        #     print('precision:, -1', file=f)
+        # f.write('\n')
+        # try:
+        #     print('recall:, %f' % (integration_a / (integration_a + integration_c)), file=f)
+        # except:
+        #     print('recall:, -1', file=f)
+        # f.write('\n')
+        # try:
+        #     print('f1 score:, %f' % ((2 * (integration_a / (integration_a + integration_b)) * (integration_a / (integration_a + integration_c))) / ((integration_a / (integration_a + integration_b)) + (integration_a / (integration_a + integration_c)))),
+        #           file=f)
+        # except:
+        #     print('f1 score:, -1', file=f)
+        # f.write('\n')
     print('Writing result .. ok')
     plt.savefig(root_path + 'result/%s/%s/%s/%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.png' % (local, city, target_kind, target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), dpi=100)
 else:

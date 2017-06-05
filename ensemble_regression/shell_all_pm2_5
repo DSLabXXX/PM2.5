@@ -1,10 +1,10 @@
 #!/bin/bash
 
-file_path=/home/clliao/workspace/python/weather_prediction/ensemble_regression/mainPM2_5.py
-training_year=2014-2015
-testing_year=2015-2015
-training_duration=1/1-11/30
-testing_duration=12/1-12/31
+file_path=/media/clliao/006a3168-df49-4b0a-a874-891877a88870/clliao/workspace/python/weather_prediction/ensemble_regression/main_PM2_5.py
+training_year=2014-2016
+testing_year=2017-2017
+training_duration=1/1-12/31
+testing_duration=1/1-1/31
 is_training=True
 for month in 1
 do
