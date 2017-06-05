@@ -72,31 +72,31 @@ pollution_site_map = {
 high_alert = 53.5
 low_alert = 35.5
 
-local = '北部'
-city = '台北'
-site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-target_site = '中山'
-
-training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = ['2017', '2017']
-
-training_duration = ['1/1', '12/31']
-testing_duration = ['1/1', '1/31']
-interval_hours = 6  # predict the label of average data of many hours later, default is 1
-is_training = True
-
-# local = os.sys.argv[1]
-# city = os.sys.argv[2]
-# site_list = pollution_site_map[local][city]
-# target_site = os.sys.argv[3]
+# local = '北部'
+# city = '台北'
+# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+# target_site = '中山'
 #
-# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = ['2017', '2017']
 #
-# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = ['1/1', '12/31']
+# testing_duration = ['1/1', '1/31']
+# interval_hours = 6  # predict the label of average data of many hours later, default is 1
+# is_training = True
+
+local = os.sys.argv[1]
+city = os.sys.argv[2]
+site_list = pollution_site_map[local][city]
+target_site = os.sys.argv[3]
+
+training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+
+training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
 
 target_kind = 'PM2.5'
 # target_kind = 'O3'
