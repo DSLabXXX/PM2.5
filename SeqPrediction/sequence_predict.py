@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 
 from generator import Generator
+from discriminator import Discriminator
 from dataloader import Gen_Data_loader, Dis_dataloader
 from config import root
 
@@ -71,7 +72,7 @@ HIDDEN_DIM_2 = 32         # hidden state dimension of lstm cell of the second la
 SEQ_LENGTH_1 = 12         # sequence length of the first layer
 SEQ_LENGTH_2 = 24        # sequence length of the second layer
 START_TOKEN = -1
-# PRE_EPOCH_NUM = 1     # supervise (maximum likelihood estimation) epochs
+PRE_EPOCH_NUM = 1     # supervise (maximum likelihood estimation) epochs
 SEED = 88
 BATCH_SIZE = 64
 # ROLLOUT_NUM = 16
@@ -81,11 +82,11 @@ BATCH_SIZE = 64
 #
 #  Discriminator  Hyper-parameters
 # ----------------------------------------------------------------------------
-# dis_embedding_dim = 64
-# dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
-# dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
+dis_embedding_dim = 64
+dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
+dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
 # dis_dropout_keep_prob = 0.75
-# dis_l2_reg_lambda = 0.2
+dis_l2_reg_lambda = 0.2
 # dis_batch_size = 64
 # D_STEPS = 5
 # ----------------------------------------------------------------------------
@@ -96,9 +97,53 @@ BATCH_SIZE = 64
 # TOTAL_BATCH = 800
 positive_file = 'save/real_data.txt'
 negative_file = 'save/generator_sample.txt'
-# eval_file = 'save/eval_file.txt'
-# generated_num = 10000
+eval_file = 'save/eval_file.txt'
+generated_num = 10000
 # ----------------------------------------------------------------------------
+
+
+def generate_samples(sess, trainable_model, batch_size, generated_num, data_loader, output_file):
+    # Generate Samples
+    # Use the <trainable_model> to generate the positive examples.
+    # And then write the samples into <output_file>.
+    data_loader.reset_pointer()
+
+    generated_samples = []
+    for _ in range(int(generated_num / batch_size)):
+        batch_x, _ = data_loader.next_batch()
+        generated_samples.extend(trainable_model.generate(sess, batch_x))
+
+    with open(output_file, 'w') as fout:
+        for poem in generated_samples:
+            buffer = ' '.join([str(x) for x in poem]) + '\n'
+            fout.write(buffer)
+
+
+def target_loss(sess, target_lstm, data_loader):
+    # <target_loss> means the oracle negative log-likelihood tested with the oracle model <target_lstm>
+    # For more details, please see the Section 4 in https://arxiv.org/abs/1609.05473
+    nll = []
+    data_loader.reset_pointer()
+
+    for it in range(data_loader.num_batch):
+        batch_x, batch_y = data_loader.next_batch()
+        g_loss = sess.run(target_lstm.pretrain_loss, feed_dict={target_lstm.x: batch})
+        nll.append(g_loss)
+
+    return np.mean(nll)
+
+
+def pre_train_epoch(sess, trainable_model, data_loader):
+    # Pre-train the generator using MLE for one epoch
+    supervised_g_losses = []
+    data_loader.reset_pointer()
+
+    for it in range(data_loader.num_batch):
+        batch_x, batch_y = data_loader.next_batch()
+        _, g_loss = trainable_model.pretrain_step(sess, batch_x, batch_y)
+        supervised_g_losses.append(g_loss)
+
+    return np.mean(supervised_g_losses)
 
 
 def main():
@@ -109,19 +154,66 @@ def main():
     # Declare data loader
     # ----------------------------------------------------------------------------
     gen_data_loader = Gen_Data_loader(BATCH_SIZE)
-    # likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)  # For testing
+    likelihood_data_loader = Gen_Data_loader(BATCH_SIZE)  # For testing
     dis_data_loader = Dis_dataloader(BATCH_SIZE)
     # ----------------------------------------------------------------------------
-
-    # load the air data and write positive file
-    # gen_data_loader.load_data(root_path+positive_file, site_list, target_site, target_kind, training_year,
-    #                           training_duration, pollution_kind, SEQ_LENGTH)
 
     #
     # Declare Generator & Discriminator
     # ----------------------------------------------------------------------------
     # declare: generator
     generator = Generator(NUM_EMB, EMB_DIM, BATCH_SIZE, HIDDEN_DIM_1, HIDDEN_DIM_2, SEQ_LENGTH_1, SEQ_LENGTH_2, START_TOKEN)
+
+    # declare: discriminator
+    discriminator = Discriminator(sequence_length=SEQ_LENGTH_2, emb_vec_dim=EMB_DIM, num_classes=2,
+                                  vocab_size=1, embedding_size=dis_embedding_dim,
+                                  filter_sizes=dis_filter_sizes, num_filters=dis_num_filters,
+                                  l2_reg_lambda=dis_l2_reg_lambda)
+    # ----------------------------------------------------------------------------
+
+    #
+    # Set the session <sess>
+    # ----------------------------------------------------------------------------
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.Session(config=config)
+    sess.run(tf.global_variables_initializer())
+    # ----------------------------------------------------------------------------
+
+    #
+    # load the air data and write positive file
+    gen_data_loader.load_data(root_path + positive_file, site_list, target_site, target_kind, training_year,
+                              training_duration, pollution_kind, SEQ_LENGTH_1, SEQ_LENGTH_2)
+
+    likelihood_data_loader.load_data(root_path + positive_file, site_list, target_site, target_kind, training_year,
+                                     training_duration, pollution_kind, SEQ_LENGTH_1, SEQ_LENGTH_2)
+
+    gen_data_loader.create_batches(positive_file, SEQ_LENGTH_2)
+
+    log = open('save/experiment-log.txt', 'w')
+
+    #
+    # Pre-train <generator> by using <gen_data_loader>,
+    # and then compute the <test_loss> of <target_lstm> and <likelihood_data_loader>
+    # ----------------------------------------------------------------------------
+    print('Start pre-training...')
+    log.write('pre-training...\n')
+    for epoch in range(PRE_EPOCH_NUM):
+        loss = pre_train_epoch(sess, generator, gen_data_loader)
+        if epoch % 5 == 0:
+            # generate samples by using <generator> and write the samples to file <eval_file>
+            generate_samples(sess, generator, BATCH_SIZE, generated_num, gen_data_loader, eval_file)
+
+            # load samples from file <eval_file>
+            likelihood_data_loader.create_batches(eval_file, SEQ_LENGTH_2)
+
+            # compute <test_loss> of <target_lstm>, with input <likelihood_data_loader>
+            # test_loss = target_loss(sess, target_lstm, likelihood_data_loader)
+
+            print('pre-train epoch ', epoch, 'test_loss ', test_loss)
+            buffer = 'epoch:\t' + str(epoch) + '\tnll:\t' + str(test_loss) + '\n'
+            log.write(buffer)
+            # ----------------------------------------------------------------------------
 
     print('OK')
 

@@ -58,9 +58,11 @@ class Discriminator(object):
     Uses an embedding layer, followed by a convolutional, max-pooling and softmax layer.
     """
 
-    def __init__(self, sequence_length, num_classes, vocab_size,
+    def __init__(self, sequence_length, emb_vec_dim, num_classes, vocab_size,
                  embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
         # Placeholders for input, output and dropout
+        self.emb_vec_dim = emb_vec_dim
+        self.emb_vec = tf.placeholder(tf.float32, shape=[self.emb_vec_dim])
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
@@ -115,6 +117,10 @@ class Discriminator(object):
             # Add highway
             with tf.name_scope("highway"):
                 self.h_highway = highway(self.h_pool_flat, self.h_pool_flat.get_shape()[1], 1, 0)
+
+            # Add emb_vec
+            # self.emb_vec = tf.reshape(self.emb_vec, [-1, self.emb_vec_dim])
+            # self.h_emb = tf.concat([self.emb_vec, self.h_highway], 1)
 
             # Add dropout
             with tf.name_scope("dropout"):
