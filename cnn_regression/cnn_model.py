@@ -119,7 +119,7 @@ pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']
 target_kind = 'PM2.5'
 data_update = False
 epochs = 50
-batch_size = 10
+batch_size = 1000
 seed = 0
 
 
@@ -406,11 +406,19 @@ if is_training:
                   optimizer='nadam',
                   metrics=['accuracy'])
 
+    # --
+    start_time = time.time()
+
     model.fit([X_train, X_train_freq], Y_train,
               batch_size=batch_size,
               epochs=epochs,
               verbose=1,
               validation_data=([X_test, X_test_freq], ((Y_test-mean_y_train)/std_y_train)))
+
+    final_time = time.time()
+    print('Training .. ok, ', end='')
+    time_spent_printer(start_time, final_time)
+    # --
 
     score = model.evaluate([X_test, X_test_freq], ((Y_test-mean_y_train)/std_y_train), verbose=0)
 
