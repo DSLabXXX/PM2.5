@@ -119,7 +119,7 @@ pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']
 target_kind = 'PM2.5'
 data_update = False
 epochs = 50
-batch_size = 1000
+batch_size = 500
 seed = 0
 
 
