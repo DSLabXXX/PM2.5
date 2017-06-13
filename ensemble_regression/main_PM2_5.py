@@ -528,10 +528,10 @@ rnn_pred = rnn_pred.reshape(len(X_test), 1)
 # ensemble_X_test = np.hstack((X_test, xgb_pred, rf_pred, rnn_pred))
 ensemble_X_test = np.hstack((X_test, xgb_pred, rnn_pred))
 
-Y_alert_test = np.zeros(len(Y_test))
-for element in range(len(Y_test)):
-    if Y_test[element] > high_alert:
-        Y_alert_test[element] = 1  # [1, 0] = [high, low]
+# Y_alert_test = np.zeros(len(Y_test))
+# for element in range(len(Y_test)):
+#     if Y_test[element] > high_alert:
+#         Y_alert_test[element] = 1  # [1, 0] = [high, low]
 
 print('\n- ensemble -')
 filename = ("ensemble_%s_training_%s_m%s_to_%s_m%s_interval_%s"
