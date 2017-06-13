@@ -10,6 +10,8 @@ import os
 
 import xgboost as xgb
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')
 
 # from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.models import Sequential
