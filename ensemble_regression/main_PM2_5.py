@@ -350,8 +350,8 @@ else:  # is_training = false
                 coordin = data_coordinate_angle(
                     (X_test[i].pop(specific_index + j)) * std_X_train[specific_index] + mean_X_train[
                         specific_index])
-                X_test[i].insert(specific_index, coordin[1])
-                X_test[i].insert(specific_index, coordin[0])
+                X_test[i].insert(specific_index + j, coordin[1])
+                X_test[i].insert(specific_index + j, coordin[0])
         X_test = np.array(X_test)
     Y_test = np.array(Y_test, dtype=np.float)
 
