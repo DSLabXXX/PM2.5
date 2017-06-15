@@ -7,7 +7,7 @@ import numpy as np
 import time
 import keras
 # import sys
-# import os
+import os
 import cPickle
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
@@ -73,31 +73,31 @@ pollution_site_map = {
 }
 
 
-local = '北部'
-city = '台北'
-site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-target_site = '萬華'
-
-training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = ['2016', '2016']
-
-training_duration = ['1/1', '6/30']
-testing_duration = ['7/1', '12/31']
-interval_hours = 24  # predict the label of average data of many hours later, default is 1
-is_training = True
-
-# local = os.sys.argv[1]
-# city = os.sys.argv[2]
-# site_list = pollution_site_map[local][city]
-# target_site = os.sys.argv[3]
+# local = '北部'
+# city = '台北'
+# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+# target_site = '萬華'
 #
-# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = ['2016', '2016']
 #
-# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = ['1/1', '6/30']
+# testing_duration = ['7/1', '12/31']
+# interval_hours = 24  # predict the label of average data of many hours later, default is 1
+# is_training = True
+
+local = os.sys.argv[1]
+city = os.sys.argv[2]
+site_list = pollution_site_map[local][city]
+target_site = os.sys.argv[3]
+
+training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+
+training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
 
 # clear redundancy work
 if training_year[0] == training_year[1]:
@@ -119,7 +119,7 @@ pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']
 target_kind = 'PM2.5'
 data_update = False
 epochs = 50
-batch_size = 500
+batch_size = 256
 seed = 0
 
 
@@ -143,6 +143,10 @@ print(filename)
 print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], training_year[-1], training_duration[-1]))
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
 
+if is_training:
+    print('Training ..')
+else:
+    print('Testing ..')
 
 # reading data
 print('Reading data .. ')
@@ -339,6 +343,7 @@ else:
 
 
 # -- model --
+print('Building model ..')
 
 if is_training:
     # model = Sequential()
@@ -406,6 +411,8 @@ if is_training:
                   optimizer='nadam',
                   metrics=['accuracy'])
 
+    print('Start training ..')
+
     # --
     start_time = time.time()
 
@@ -443,6 +450,9 @@ pred = mean_y_train + std_y_train * pred
 
 print('rmse: %.5f' % (np.mean((Y_test - pred.reshape([len(Y_test)]))**2, 0)**0.5))
 
+with open(root_path + 'result/' + filename + '.ods', 'wt') as f:
+    f.write('rmse: %f' % (np.sqrt(np.mean((Y_test - pred) ** 2))))
+
 plt.plot(np.arange(len(pred)), Y_test[:len(pred)], c='gray')
 plt.plot(np.arange(len(pred)), pred, color='pink')
 plt.xticks(np.arange(0, len(pred), 24))
@@ -450,4 +460,4 @@ plt.yticks(np.arange(0, max(Y_test), 10))
 plt.grid(True)
 plt.rc('axes', labelsize=4)
 plt.savefig(root_path + 'result/' + filename + '.png')
-plt.show()
+# plt.show()
