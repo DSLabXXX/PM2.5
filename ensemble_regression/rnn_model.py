@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
 
+import keras
 # from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout
@@ -20,6 +21,7 @@ from keras.layers.core import Dense, Dropout
 from keras.layers.recurrent import LSTM  # , GRU, SimpleRNN
 from keras.regularizers import l2
 from keras.layers.normalization import BatchNormalization
+from keras.models import Model
 
 from reader import read_data_sets, concatenate_time_steps, construct_time_steps
 from missing_value_processer import missing_check
@@ -71,8 +73,8 @@ pollution_site_map = {
 }
 
 
-high_alert = 53.5
-low_alert = 35.5
+# high_alert = 53.5
+# low_alert = 35.5
 
 # local = '北部'
 # city = '台北'
@@ -137,6 +139,7 @@ print('site: %s' % target_site)
 print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], training_year[-1], training_duration[-1]))
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
 print('Target: %s' % target_kind)
+
 
 # for interval
 def ave(X, Y, interval_hours):
@@ -434,7 +437,8 @@ if is_training:
     rnn_model.fit(X_rnn_train, Y_train, batch_size=batch_size, epochs=50)
 
     # Potentially save weights
-    rnn_model.save_weights(folder + filename, overwrite=True)
+    # rnn_model.save_weights(folder + filename, overwrite=True)
+    rnn_model.save(folder + filename, overwrite=True)
 
     final_time = time.time()
     time_spent_printer(start_time, final_time)
@@ -442,7 +446,8 @@ if is_training:
 else:
     print('loading model ..')
     # print('loading model from %s' % (folder + filename + ".hdf5"))
-    rnn_model.load_weights(folder + filename)
+    # rnn_model.load_weights(folder + filename)
+    rnn_model = keras.models.load_model(folder + filename)
 
 rnn_pred = rnn_model.predict(X_rnn_test, batch_size=500, verbose=1)
 final_time = time.time()

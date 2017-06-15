@@ -9,13 +9,16 @@ import cPickle
 import os
 
 import xgboost as xgb
+from scipy.fftpack import fft
 import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('Agg')
+# import matplotlib
+# matplotlib.use('Agg')
 
+import keras
 # from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout
+from keras import backend as K
 # from keras.layers.embeddings import Embedding
 from keras.layers.recurrent import LSTM  # , GRU, SimpleRNN
 from keras.regularizers import l2
@@ -71,37 +74,36 @@ pollution_site_map = {
 }
 
 
-high_alert = 53.5
-low_alert = 35.5
+# high_alert = 53.5
+# low_alert = 35.5
 
-# local = '北部'
-# city = '台北'
-# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-# target_site = '中山'
+local = '北部'
+city = '台北'
+site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+target_site = '中山'
+
+training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = ['2016', '2016']
+
+training_duration = ['1/1', '6/30']
+testing_duration = ['11/1', '12/31']
+interval_hours = 24  # predict the label of average data of many hours later, default is 1
+is_training = True
+
+# local = os.sys.argv[1]
+# city = os.sys.argv[2]
+# site_list = pollution_site_map[local][city]
+# target_site = os.sys.argv[3]
 #
-# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = ['2017', '2017']
+# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
 #
-# training_duration = ['1/1', '12/31']
-# testing_duration = ['1/1', '1/31']
-# interval_hours = 6  # predict the label of average data of many hours later, default is 1
-# is_training = True
-
-local = os.sys.argv[1]
-city = os.sys.argv[2]
-site_list = pollution_site_map[local][city]
-target_site = os.sys.argv[3]
-
-training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
-
-training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
 
 target_kind = 'PM2.5'
-# target_kind = 'O3'
 
 # clear redundancy work
 if training_year[0] == training_year[1]:
@@ -119,22 +121,23 @@ for i in range(rangeofYear):
 
 # Training Parameters
 # WIND_DIREC is a specific feature, that need to be processed, and it can only be element of input vector now.
-if target_kind == 'PM2.5':
-    pollution_kind = ['PM2.5', 'O3', 'WIND_SPEED', 'WIND_DIREC']  # , 'AMB_TEMP', 'RH'
-elif target_kind == 'O3':
-    pollution_kind = ['O3', 'NOx', 'WIND_SPEED', 'WIND_DIREC']
+pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']  # , 'AMB_TEMP', 'RH'
 data_update = False
 # batch_size = 24 * 7
 seed = 0
 
 # Network Parameters
 input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC' in pollution_kind else (len(site_list)*len(pollution_kind))
+freq_input_size = len(site_list)*len(pollution_kind)
 time_steps = 12
 # hidden_size = 20
 output_size = 1
+cnn_time_steps = 24 * 30
+fourier_time_range = 24 * 15
+fourier_time_shift = 24 * 5
 
 testing_month = testing_duration[0][:testing_duration[0].index('/')]
-folder = root_path+"model/%s/%s/%sh/%s/" % (local, city, interval_hours, target_kind)
+folder = root_path+"model/%s/%s/%sh/" % (local, city, interval_hours)
 training_begining = training_duration[0][:training_duration[0].index('/')]
 training_deadline = training_duration[-1][:training_duration[-1].index('/')]
 print('site: %s' % target_site)
@@ -142,8 +145,9 @@ print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], t
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
 print('Target: %s' % target_kind)
 
+
 # for interval
-def ave(X, Y, interval_hours):
+def ave(Y, interval_hours):
     reserve_hours = interval_hours - 1
     deadline = 0
     for i in range(len(Y)):
@@ -155,13 +159,12 @@ def ave(X, Y, interval_hours):
             Y[i] += Y[i + j + 1]
         Y[i] /= interval_hours
     if deadline:
-        X = X[:deadline]
         Y = Y[:deadline]
-    return X, Y
+    return Y
 
 
 # for interval
-def higher(X, Y, interval_hours):
+def higher(Y, interval_hours):
     reserve_hours = 1  # choose the first n number of biggest
     if interval_hours > reserve_hours:
         deadline = 0
@@ -179,9 +182,9 @@ def higher(X, Y, interval_hours):
                 higher_list = sorted(higher_list)
             Y[i] = np.array(higher_list).sum() / reserve_hours
         if deadline:
-            X = X[:deadline]
             Y = Y[:deadline]
-    return X, Y
+    return Y
+
 
 if is_training:
     # reading data
@@ -215,7 +218,28 @@ if is_training:
     if (len(X_train) < time_steps) or (len(X_test) < time_steps):
         input('time_steps(%d) too long.' % time_steps)
 
-    # normalize
+    # ----------------------------------------- feature processing -----------------------------------------------------
+    # only for cnn model
+    if 'WIND_DIREC' in pollution_kind:
+        index_of_kind = pollution_kind.index('WIND_DIREC')
+        length_of_kind_list = len(pollution_kind)
+        len_of_sites_list = len(site_list)
+        X_cnn_train = X_train.tolist()
+        X_cnn_test = X_test.tolist()
+        for i in range(len(X_cnn_train)):
+            for j in range(len_of_sites_list):
+                specific_index = index_of_kind + j * length_of_kind_list
+                coordin = data_coordinate_angle(X_cnn_train[i].pop(specific_index + j))
+                X_cnn_train[i].insert(specific_index + j, coordin[1])
+                X_cnn_train[i].insert(specific_index + j, coordin[0])
+                if i < len(X_cnn_test):
+                    coordin = data_coordinate_angle(X_cnn_test[i].pop(specific_index + j))
+                    X_cnn_test[i].insert(specific_index + j, coordin[1])
+                    X_cnn_test[i].insert(specific_index + j, coordin[0])
+        X_cnn_train = np.array(X_cnn_train)
+        X_cnn_test = np.array(X_cnn_test)
+
+    # Normalize
     print('Normalize ..')
     mean_X_train = np.mean(X_train, axis=0)
     std_X_train = np.std(X_train, axis=0)
@@ -231,7 +255,7 @@ if is_training:
     Y_train = [(y - mean_y_train) / std_y_train for y in Y_train]
     print('mean_y_train: %f  std_y_train: %f' % (mean_y_train, std_y_train))
 
-    fw = open(folder + "%s_parameter.pickle" % target_site, 'wb')
+    fw = open(folder + "%s_parameter_%s.pickle" % (target_site, target_kind), 'wb')
     cPickle.dump(str(mean_X_train) + ',' +
                  str(std_X_train) + ',' +
                  str(mean_y_train) + ',' +
@@ -259,9 +283,13 @@ if is_training:
         X_test = np.array(X_test)
     Y_test = np.array(Y_test, dtype=np.float)
 
-    # --
+    # ---------------------------------------------- Data Frame --------------------------------------------------------
 
     print('Constructing time series data set ..')
+    # for cnn
+    X_cnn_train = construct_time_steps(X_cnn_train[:-1], cnn_time_steps)
+    X_cnn_test = construct_time_steps(X_cnn_test[:-1], cnn_time_steps)
+
     # for rnn
     X_rnn_train = construct_time_steps(X_train[:-1], time_steps)
     X_rnn_test = construct_time_steps(X_test[:-1], time_steps)
@@ -272,35 +300,80 @@ if is_training:
     X_test = concatenate_time_steps(X_test[:-1], time_steps)
     Y_test = Y_test[time_steps:]
 
-    if target_kind == 'PM2.5':
-        [X_train, Y_train] = higher(X_train, Y_train, interval_hours)
-        [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
-    elif target_kind == 'O3':
-        [X_train, Y_train] = ave(X_train, Y_train, interval_hours)
-        [X_test, Y_test] = ave(X_test, Y_test, interval_hours)
+    Y_train = higher(Y_train, interval_hours)
+    Y_test = higher(Y_test, interval_hours)
 
-    X_rnn_train = X_rnn_train[:len(X_train)]
-    X_rnn_test = X_rnn_test[:len(X_test)]
+    train_seq_len = np.min([len(Y_train), len(X_train), len(X_rnn_train), len(X_cnn_train)])
+    test_seq_len = np.min([len(Y_test), len(X_test), len(X_rnn_test), len(X_cnn_test)])
 
-    # delete data which have missing values
+    X_train = X_train[:train_seq_len]
+    X_test = X_test[:test_seq_len]
+
+    X_cnn_train = X_cnn_train[:train_seq_len]
+    X_cnn_test = X_cnn_test[:test_seq_len]
+
+    X_rnn_train = X_rnn_train[:train_seq_len]
+    X_rnn_test = X_rnn_test[:test_seq_len]
+
+    Y_train = Y_train[:train_seq_len]
+    Y_test = Y_test[:test_seq_len]
+
+    # ------------------------------------------- fourier transfer -----------------------------------------------------
+    def time_domain_to_frequency_domain(time_tensor):
+        freq_tensor = []
+        for f_i in range(len(time_tensor)):
+            freq_feature_matrix = []
+            for f_j in range(len(pollution_kind) * len(site_list)):
+                freq_feature_vector = np.array([])
+                for f_k in range(((cnn_time_steps - fourier_time_range) / fourier_time_shift) + 1):
+                    freq_feature_vector = np.concatenate((
+                        freq_feature_vector,
+                        np.real(
+                            fft(time_tensor[f_i, f_k * fourier_time_shift:f_k * fourier_time_shift + fourier_time_range,
+                                f_j])
+                        )
+                    ))
+                freq_feature_matrix.append(freq_feature_vector)
+            freq_tensor.append(np.array(freq_feature_matrix).T)
+        return freq_tensor
+
+    start_time = time.time()
+    print('fourier transfer .. ')
+    print('for training data ..')
+    X_cnn_train = np.array(X_cnn_train)
+    X_train_freq = time_domain_to_frequency_domain(X_cnn_train)
+    print('for testing data ..')
+    X_cnn_test = np.array(X_cnn_test)
+    X_test_freq = time_domain_to_frequency_domain(X_cnn_test)
+    final_time = time.time()
+    print('fourier transfer .. ok, ', end='')
+    time_spent_printer(start_time, final_time)
+
+    # ------------------------------ delete data which have missing values ---------------------------------------------
     i = 0
     while i < len(Y_test):
         if not(Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
             Y_test = np.delete(Y_test, i, 0)
             X_test = np.delete(X_test, i, 0)
             X_rnn_test = np.delete(X_rnn_test, i, 0)
+            X_cnn_test = np.delete(X_cnn_test, i, 0)
+            X_test_freq = np.delete(X_test_freq, i, 0)
             i = -1
         i += 1
     Y_test = np.array(Y_test, dtype=np.float)
 
-    # --
-
+    # -- np.array --
+    X_cnn_train = np.array(X_cnn_train)
+    X_cnn_test = np.array(X_cnn_test)
+    X_train_freq = np.array(X_train_freq)
+    X_test_freq = np.array(X_test_freq)
     X_rnn_train = np.array(X_rnn_train)
     X_rnn_test = np.array(X_rnn_test)
     X_train = np.array(X_train)
-    Y_train = np.array(Y_train)
     X_test = np.array(X_test)
+    Y_train = np.array(Y_train)
 
+    # -- shuffle --
     np.random.seed(seed)
     np.random.shuffle(X_train)
     np.random.seed(seed)
@@ -308,10 +381,14 @@ if is_training:
 
     np.random.seed(seed)
     np.random.shuffle(X_rnn_train)
+    np.random.seed(seed)
+    np.random.shuffle(X_cnn_train)
+    np.random.seed(seed)
+    np.random.shuffle(X_train_freq)
 
 else:  # is_training = false
     # mean and std
-    fr = open(folder + "%s_parameter.pickle" % target_site, 'rb')
+    fr = open(folder + "%s_parameter_%s.pickle" % (target_site, target_kind), 'rb')
     [mean_X_train, std_X_train, mean_y_train, std_y_train] = (cPickle.load(fr)).split(',')
     mean_X_train = mean_X_train.replace('[', '').replace(']', '').replace('\n', '').split(' ')
     while '' in mean_X_train:
@@ -334,13 +411,30 @@ else:  # is_training = false
     Y_test = Y_test[:, pollution_kind.index(target_kind)]
     X_test = missing_check(np.array(X_test)[:, :-len(pollution_kind)])
 
+    # ----------------------------------------- feature processing -----------------------------------------------------
+
+    # only for cnn
+    if 'WIND_DIREC' in pollution_kind:
+        index_of_kind = pollution_kind.index('WIND_DIREC')
+        length_of_kind_list = len(pollution_kind)
+        len_of_sites_list = len(site_list)
+        X_cnn_test = X_test.tolist()
+        for i in range(len(X_cnn_test)):
+            for j in range(len_of_sites_list):
+                specific_index = index_of_kind + j * length_of_kind_list
+                coordin = data_coordinate_angle(X_cnn_test[i].pop(specific_index + j))
+                X_cnn_test[i].insert(specific_index + j, coordin[1])
+                X_cnn_test[i].insert(specific_index + j, coordin[0])
+        X_cnn_test = np.array(X_cnn_test)
+
+    # other model
     # normalize
     print('Normalize ..')
     if 0 in std_X_train:
         input("Denominator can't be 0.")
     X_test = np.array([(x_test-mean_X_train)/std_X_train for x_test in X_test])
 
-    # feature process
+    # feature process: WIND_DIREC
     if 'WIND_DIREC' in pollution_kind:
         index_of_kind = pollution_kind.index('WIND_DIREC')
         length_of_kind_list = len(pollution_kind)
@@ -357,80 +451,78 @@ else:  # is_training = false
         X_test = np.array(X_test)
     Y_test = np.array(Y_test, dtype=np.float)
 
-    # --
+    # ---------------------------------------------- Data Frame --------------------------------------------------------
 
     print('Constructing time series data set ..')
+    X_cnn_test = construct_time_steps(X_cnn_test[:-1], cnn_time_steps)
     X_rnn_test = construct_time_steps(X_test[:-1], time_steps)
     X_test = concatenate_time_steps(X_test[:-1], time_steps)
     Y_test = Y_test[time_steps:]
 
-    if target_kind == 'PM2.5':
-        [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
-    elif target_kind == 'O3':
-        [X_test, Y_test] = ave(X_test, Y_test, interval_hours)
+    Y_test = higher(Y_test, interval_hours)
 
-    X_rnn_test = X_rnn_test[:len(X_test)]
+    test_seq_len = np.min([len(Y_test), len(X_test), len(X_rnn_test), len(X_cnn_test)])
 
-    # delete data which have missing values
+    X_rnn_test = X_rnn_test[:test_seq_len]
+    X_cnn_test = X_cnn_test[:test_seq_len]
+
+    # ------------------------------------------- fourier transfer -----------------------------------------------------
+
+    start_time = time.time()
+    print('fourier transfer .. ')
+    print('for testing data ..')
+    X_cnn_test = np.array(X_cnn_test)
+    X_test_freq = time_domain_to_frequency_domain(X_cnn_test)
+    final_time = time.time()
+    print('fourier transfer .. ok, ', end='')
+    time_spent_printer(start_time, final_time)
+
+    # ---------------------------------- delete data which have missing values -----------------------------------------
     i = 0
     while i < len(Y_test):
         if not (Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
             Y_test = np.delete(Y_test, i, 0)
             X_test = np.delete(X_test, i, 0)
             X_rnn_test = np.delete(X_rnn_test, i, 0)
+            X_cnn_test = np.delete(X_cnn_test, i, 0)
+            X_test_freq = np.delete(X_test_freq, i, 0)
             i = -1
         i += 1
     Y_test = np.array(Y_test, dtype=np.float)
 
     # --
 
+    X_cnn_test = np.array(X_cnn_test)
+    X_test_freq = np.array(X_test_freq)
     X_rnn_test = np.array(X_rnn_test)
     X_test = np.array(X_test)
 
-# -- xgboost --
+
+# ----------------------------------------------------- xgboost --------------------------------------------------------
 print('- xgboost -')
 
-filename = ("xgboost_%s_training_%s_m%s_to_%s_m%s_interval_%s"
-            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
+filename = ("xgboost_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
 print(filename)
 
-if is_training:
-    xgb_model = xgb.XGBRegressor().fit(X_train, Y_train)
-
-    fw = open(folder + filename, 'wb')
-    cPickle.dump(xgb_model, fw)
-    fw.close()
-else:
+try:
     fr = open(folder + filename, 'rb')
     xgb_model = cPickle.load(fr)
     fr.close()
+except:
+    print('xgboost_model error')
+    exit()
 
 xgb_pred = xgb_model.predict(X_test)
 
 print('rmse(xgboost): %.5f' % (np.mean((Y_test - (mean_y_train + std_y_train * xgb_pred))**2, 0)**0.5))
 
-# -- random forest --
-# print('- random forest -')
-#
-# filename = ("random_forest_%s_training_%s_m%s_to_%s_m%s_interval_%s"
-#             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
-# print(filename)
-#
-# rf_model = RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
-#                                  max_features='auto', max_leaf_nodes=None, min_samples_leaf=2,
-#                                  min_samples_split=10, min_weight_fraction_leaf=0.0,
-#                                  n_estimators=10, n_jobs=5, oob_score=False, random_state=None,
-#                                  verbose=0, warm_start=False)
-# rf_model.fit(X_train, Y_train)
-# rf_pred = rf_model.predict(X_test)
-#
-# print('rmse(random forest): %.5f' % (np.mean((Y_test - (mean_y_train + std_y_train * rf_pred))**2, 0)**0.5))
 
-# -- rnn --
+# --------------------------------------------------- rnn --------------------------------------------------------------
 print('- rnn -')
 
-filename = ("sa_DropoutLSTM_%s_training_%s_m%s_to_%s_m%s_interval_%s"
-            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
+filename = ("sa_DropoutLSTM_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
 print(filename)
 
 # Network Parameters
@@ -484,51 +576,81 @@ rnn_model.compile(loss='mean_squared_error', optimizer=optimiser)
 final_time = time.time()
 time_spent_printer(start_time, final_time)
 
-
-if is_training:
-    print("Train...")
-    start_time = time.time()
-    rnn_model.fit(X_rnn_train, Y_train, batch_size=batch_size, epochs=50)
-
-    # Potentially save weights
-    rnn_model.save_weights(folder + filename, overwrite=True)
-
-    final_time = time.time()
-    time_spent_printer(start_time, final_time)
-
-else:
+try:
     print('loading model ..')
     # print('loading model from %s' % (folder + filename + ".hdf5"))
     rnn_model.load_weights(folder + filename)
+except:
+    print('rnn_model error')
+    exit()
 
 rnn_pred = rnn_model.predict(X_rnn_test, batch_size=500, verbose=1)
 final_time = time.time()
 time_spent_printer(start_time, final_time)
 print('rmse(rnn): %.5f' % (np.mean((np.atleast_2d(Y_test).T - (mean_y_train + std_y_train * rnn_pred))**2, 0)**0.5))
 
-# --  ensemble --
+# --------------------------------------------------- cnn --------------------------------------------------------------
+print('- cnn -')
+
+freq_time_step = (((cnn_time_steps-fourier_time_range)/fourier_time_shift)+1)*fourier_time_range
+if K.image_data_format() == 'channels_first':
+    if is_training:
+        X_cnn_train = X_cnn_train.reshape(X_cnn_train.shape[0], 1, cnn_time_steps, input_size)
+    X_cnn_test = X_cnn_test.reshape(X_cnn_test.shape[0], 1, cnn_time_steps, input_size)
+    input_shape = (1, cnn_time_steps, input_size)
+
+    if is_training:
+        X_train_freq = X_train_freq.reshape(X_train_freq.shape[0], 1, freq_time_step, freq_input_size)
+    X_test_freq = X_test_freq.reshape(X_test_freq.shape[0], 1, freq_time_step, freq_input_size)
+    freq_input_shape = (1, freq_time_step, freq_input_size)
+else:
+    if is_training:
+        X_cnn_train = X_cnn_train.reshape(X_cnn_train.shape[0], cnn_time_steps, input_size, 1)
+    X_cnn_test = X_cnn_test.reshape(X_cnn_test.shape[0], cnn_time_steps, input_size, 1)
+    input_shape = (cnn_time_steps, input_size, 1)
+
+    if is_training:
+        X_train_freq = X_train_freq.reshape(X_train_freq.shape[0], freq_time_step, freq_input_size, 1)
+    X_test_freq = X_test_freq.reshape(X_test_freq.shape[0], freq_time_step, freq_input_size, 1)
+    freq_input_shape = (freq_time_step, freq_input_size, 1)
+
+filename = ("CNN_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
+start_time = time.time()
+try:
+    cnn_model = keras.models.load_model(folder + filename)
+except:
+    print('cnn_model error')
+    exit()
+
+cnn_pred = cnn_model.predict([X_cnn_test, X_test_freq])
+final_time = time.time()
+time_spent_printer(start_time, final_time)
+print('rmse(cnn): %.5f' % (np.mean((Y_test - cnn_pred.reshape([len(Y_test)]))**2, 0)**0.5))
+
+# -----------------------------------------------  ensemble ------------------------------------------------------------
 
 print('stacking ..')
 if is_training:
     xgb_output = xgb_model.predict(X_train).reshape(len(X_train), 1)
     # rf_output = rf_model.predict(X_train).reshape(len(X_train), 1)
     rnn_output = rnn_model.predict(X_rnn_train, batch_size=500, verbose=1)
+    cnn_output = cnn_model.predict([X_cnn_train, X_train_freq], batch_size=500, verbose=1)
     # ensemble_X_train = np.hstack((X_train, xgb_output, rf_output, rnn_output))
     ensemble_X_train = np.hstack((X_train, xgb_output, rnn_output))
 
-    Y_alert_train = [y * std_y_train + mean_y_train for y in Y_train]
-    for element in range(len(Y_train)):
-        if Y_alert_train[element] > high_alert:
-            Y_alert_train[element] = 1  # [1, 0] = [high, low]
-        else:
-            Y_alert_train[element] = 0
+    # Y_alert_train = [y * std_y_train + mean_y_train for y in Y_train]
+    # for element in range(len(Y_train)):
+    #     if Y_alert_train[element] > high_alert:
+    #         Y_alert_train[element] = 1  # [1, 0] = [high, low]
+    #     else:
+    #         Y_alert_train[element] = 0
 
 
 xgb_pred = xgb_pred.reshape(len(X_test), 1)
-# rf_pred = rf_pred.reshape(len(X_test), 1)
 rnn_pred = rnn_pred.reshape(len(X_test), 1)
-# ensemble_X_test = np.hstack((X_test, xgb_pred, rf_pred, rnn_pred))
-ensemble_X_test = np.hstack((X_test, xgb_pred, rnn_pred))
+cnn_pred = cnn_pred.reshape(len(X_test), 1)
+ensemble_X_test = np.hstack((X_test, xgb_pred, rnn_pred, cnn_pred))
 
 # Y_alert_test = np.zeros(len(Y_test))
 # for element in range(len(Y_test)):
@@ -536,8 +658,8 @@ ensemble_X_test = np.hstack((X_test, xgb_pred, rnn_pred))
 #         Y_alert_test[element] = 1  # [1, 0] = [high, low]
 
 print('\n- ensemble -')
-filename = ("ensemble_%s_training_%s_m%s_to_%s_m%s_interval_%s"
-            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
+filename = ("ensemble_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
 # filename2 = ("classification_%s_training_%s_m%s_to_%s_m%s_interval_%s"
 #              % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
 
