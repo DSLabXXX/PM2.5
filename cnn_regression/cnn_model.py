@@ -172,8 +172,8 @@ final_time = time.time()
 print('Reading data .. ok, ', end='')
 time_spent_printer(start_time, final_time)
 
-print(len(X_train), 'train sequences')
-print(len(X_test), 'test sequences')
+# print(len(X_train), 'train sequences')
+# print(len(X_test), 'test sequences')
 
 if (len(X_train) < time_steps) or (len(X_test) < time_steps):
     input('time_steps(%d) too long.' % time_steps)
@@ -223,6 +223,9 @@ Y_train = Y_train[time_steps:]
 X_test = construct_time_steps(X_test[:-1], time_steps)
 Y_test = Y_test[time_steps:]
 print('ok')
+
+print(len(X_train), 'train sequences')
+print(len(X_test), 'test sequences')
 
 
 def ave(X, Y, interval_hours):
