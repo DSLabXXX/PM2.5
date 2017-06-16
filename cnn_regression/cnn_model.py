@@ -82,9 +82,9 @@ pollution_site_map = {
 # testing_year = ['2016', '2016']
 #
 # training_duration = ['1/1', '6/30']
-# testing_duration = ['7/1', '12/31']
+# testing_duration = ['11/1', '12/31']
 # interval_hours = 24  # predict the label of average data of many hours later, default is 1
-# is_training = True
+# is_training = False
 
 local = os.sys.argv[1]
 city = os.sys.argv[2]
@@ -224,9 +224,6 @@ X_test = construct_time_steps(X_test[:-1], time_steps)
 Y_test = Y_test[time_steps:]
 print('ok')
 
-print(len(X_train), 'train sequences')
-print(len(X_test), 'test sequences')
-
 
 def ave(X, Y, interval_hours):
     reserve_hours = interval_hours - 1
@@ -269,6 +266,9 @@ def higher(X, Y, interval_hours):
 
 [X_train, Y_train] = higher(X_train, Y_train, interval_hours)
 [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+
+print(len(X_train), 'train sequences')
+print(len(X_test), 'test sequences')
 
 
 # -- fourier transfer --
