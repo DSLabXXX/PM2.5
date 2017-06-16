@@ -364,6 +364,7 @@ if is_training:
     fw = open(folder + filename, 'wb')
     cPickle.dump(xgb_model, fw)
     fw.close()
+    print('model saved')
 else:
     fr = open(folder + filename, 'rb')
     xgb_model = cPickle.load(fr)

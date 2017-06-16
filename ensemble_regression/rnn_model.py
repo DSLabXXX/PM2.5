@@ -8,11 +8,6 @@ import time
 import cPickle
 import os
 
-import xgboost as xgb
-import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use('Agg')
-
 import keras
 # from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.models import Sequential
@@ -404,11 +399,11 @@ start_time = time.time()
 rnn_model = Sequential()
 
 # layer 1
-rnn_model.add(BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
-                                 gamma_init='one', gamma_regularizer=None, beta_regularizer=None,
+rnn_model.add(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
+                                 weights=None, gamma_regularizer=None, momentum=0.99, axis=-1,
                                  input_shape=(time_steps, input_size)))
-rnn_model.add(LSTM(hidden_size, W_regularizer=l2(weight_decay), U_regularizer=l2(weight_decay),
-                   b_regularizer=l2(weight_decay), dropout_W=p_W, dropout_U=p_U))  # return_sequences=True  # recurrent_dropout=0.0
+rnn_model.add(LSTM(hidden_size, recurrent_activation='linear', kernel_regularizer=l2(weight_decay),
+                   recurrent_regularizer=l2(weight_decay), bias_regularizer=l2(weight_decay), recurrent_dropout=0.5))  # return_sequences=True
 rnn_model.add(Dropout(p_dense))
 
 # layer 2
@@ -419,9 +414,9 @@ rnn_model.add(Dropout(p_dense))
 # rnn_model.add(Dropout(p_dense))
 
 # output layer
-rnn_model.add(BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
-                                 gamma_init='one', gamma_regularizer=None, beta_regularizer=None))
-rnn_model.add(Dense(output_size, W_regularizer=l2(weight_decay), b_regularizer=l2(weight_decay)))
+rnn_model.add(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
+                                 weights=None, gamma_regularizer=None, momentum=0.99, axis=-1))
+rnn_model.add(Dense(output_size, kernel_regularizer=l2(weight_decay), bias_regularizer=l2(weight_decay)))
 
 # optimiser = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=False)
 optimiser = 'adam'
@@ -442,6 +437,7 @@ if is_training:
 
     final_time = time.time()
     time_spent_printer(start_time, final_time)
+    print('model saved')
 
 else:
     print('loading model ..')
