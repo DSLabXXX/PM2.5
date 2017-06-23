@@ -127,9 +127,9 @@ input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC'
 layer1_time_steps = 24  # 24 hours a day
 layer2_time_steps = 7  # 7 days
 
-hidden_size1 = 30
-hidden_size2 = 40
-# hidden_size3 = 15
+# hidden_size1 = 16
+hidden_size2 = 32
+# hidden_size3 = 8
 output_size = 1
 
 testing_month = testing_duration[0][:testing_duration[0].index('/')]
@@ -453,8 +453,8 @@ model_layer1 = list()
 
 for i in range(layer2_time_steps):
     model_layer1.append(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
-                                               gamma_initializer="one", weights=None, gamma_regularizer=None,
-                                               momentum=0.99, axis=-1)(rnn_model_input[i]))
+                                           gamma_initializer="one", weights=None, gamma_regularizer=None,
+                                           momentum=0.99, axis=-1)(rnn_model_input[i]))
 
     flatten_cnn_layer = []
     for j in [6, 12, 18, 24]:
@@ -467,12 +467,12 @@ for i in range(layer2_time_steps):
 
 # layer 2
 model_layer2 = concatenate(model_layer1)
-model_layer2 = Reshape((layer2_time_steps, hidden_size1))(model_layer2)
+model_layer2 = Reshape((layer2_time_steps, -1))(model_layer2)
 
 model_layer2 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
-                                      weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(model_layer2)
+                                  weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(model_layer2)
 model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(
+                    bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(
     model_layer2)
 
 model_layer2 = Dropout(p_dense)(model_layer2)

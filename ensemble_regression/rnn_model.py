@@ -129,9 +129,9 @@ input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC'
 layer1_time_steps = 24  # 24 hours a day
 layer2_time_steps = 7  # 7 days
 
-hidden_size1 = 15
-hidden_size2 = 20
-# hidden_size3 = 15
+hidden_size1 = 8
+hidden_size2 = 16
+hidden_size3 = 4
 output_size = 1
 
 testing_month = testing_duration[0][:testing_duration[0].index('/')]
@@ -452,24 +452,32 @@ for i in range(layer2_time_steps):
     # recurrent_activation='relu', kernel_constraint=maxnorm(2.), recurrent_constraint=maxnorm(2.),
     # bias_constraint=maxnorm(2.)
     rnn_model_layer1[i] = LSTM(hidden_size1, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                               bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(
-        rnn_model_layer1[i])
+                               bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(rnn_model_layer1[i])
     rnn_model_layer1[i] = Dropout(p_dense)(rnn_model_layer1[i])
 
 # layer 2
 rnn_model_layer2 = concatenate(rnn_model_layer1)
+
 rnn_model_layer2 = Reshape((layer2_time_steps, hidden_size1))(rnn_model_layer2)
 
 rnn_model_layer2 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
                                       weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(rnn_model_layer2)
 rnn_model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(
-    rnn_model_layer2)
+                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(rnn_model_layer2)
 
 rnn_model_layer2 = Dropout(p_dense)(rnn_model_layer2)
 
+# third layer
+rnn_model_layer3 = rnn_model_layer2
+
+rnn_model_layer3 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
+                                      weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(rnn_model_layer3)
+rnn_model_layer3 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
+                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(rnn_model_layer3)
+rnn_model_layer3 = Dropout(p_dense)(rnn_model_layer3)
+
 # output layer
-output_layer = rnn_model_layer2
+output_layer = rnn_model_layer3
 
 output_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
                                   weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(output_layer)
@@ -533,8 +541,8 @@ plt.show()
 train_pred = rnn_model.predict([X_train[:, i, :, :][-800:] for i in range(layer2_time_steps)])
 train_pred = mean_y_train + std_y_train * train_pred
 train_pred_target = mean_y_train + std_y_train * Y_train[-800:]
-plt.plot(np.arange(len(train_pred)), train_pred_target, color='pink')
-plt.plot(np.arange(len(train_pred)), train_pred, c='mediumaquamarine')
+plt.plot(np.arange(len(train_pred)), train_pred_target, color='mediumaquamarine')
+plt.plot(np.arange(len(train_pred)), train_pred, c='pink')
 plt.xticks(np.arange(0, len(train_pred), 24))
 plt.yticks(np.arange(0, max(train_pred), 10))
 plt.grid(True)
