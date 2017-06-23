@@ -7,18 +7,21 @@ import numpy as np
 import time
 import cPickle
 import os
+import matplotlib.pyplot as plt
 
 import keras
 # from keras.optimizers import SGD, RMSprop, Adagrad
-from keras.models import Sequential
-from keras.layers.core import Dense, Dropout
+# from keras.models import Sequential
+from keras.layers.core import Dense, Dropout, Reshape
 # from keras.layers.embeddings import Embedding
+from keras.layers import Input , concatenate
 from keras.layers.recurrent import LSTM  # , GRU, SimpleRNN
 from keras.regularizers import l2
+from keras.constraints import maxnorm
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
 
-from reader import read_data_sets, concatenate_time_steps, construct_time_steps
+from reader import read_data_sets, concatenate_time_steps, construct_time_steps, construct_second_time_steps
 from missing_value_processer import missing_check
 from feature_processor import data_coordinate_angle
 from config import root
@@ -71,31 +74,31 @@ pollution_site_map = {
 # high_alert = 53.5
 # low_alert = 35.5
 
-# local = '北部'
-# city = '台北'
-# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-# target_site = '中山'
+local = '北部'
+city = '台北'
+site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+target_site = '萬華'
+
+training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = ['2016', '2016']
+
+training_duration = ['1/1', '10/31']
+testing_duration = ['12/1', '12/31']
+interval_hours = 24  # predict the label of average data of many hours later, default is 1
+is_training = True
+
+# local = os.sys.argv[1]
+# city = os.sys.argv[2]
+# site_list = pollution_site_map[local][city]
+# target_site = os.sys.argv[3]
 #
-# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = ['2017', '2017']
+# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
 #
-# training_duration = ['1/1', '12/31']
-# testing_duration = ['1/1', '1/31']
-# interval_hours = 6  # predict the label of average data of many hours later, default is 1
-# is_training = True
-
-local = os.sys.argv[1]
-city = os.sys.argv[2]
-site_list = pollution_site_map[local][city]
-target_site = os.sys.argv[3]
-
-training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
-
-training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
 
 target_kind = 'PM2.5'
 
@@ -122,8 +125,13 @@ seed = 0
 
 # Network Parameters
 input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC' in pollution_kind else (len(site_list)*len(pollution_kind))
-time_steps = 12
-# hidden_size = 20
+
+layer1_time_steps = 24  # 24 hours a day
+layer2_time_steps = 7  # 7 days
+
+hidden_size1 = 15
+hidden_size2 = 20
+# hidden_size3 = 15
 output_size = 1
 
 testing_month = testing_duration[0][:testing_duration[0].index('/')]
@@ -137,7 +145,7 @@ print('Target: %s' % target_kind)
 
 
 # for interval
-def ave(X, Y, interval_hours):
+def ave(Y, interval_hours):
     reserve_hours = interval_hours - 1
     deadline = 0
     for i in range(len(Y)):
@@ -149,13 +157,12 @@ def ave(X, Y, interval_hours):
             Y[i] += Y[i + j + 1]
         Y[i] /= interval_hours
     if deadline:
-        X = X[:deadline]
         Y = Y[:deadline]
-    return X, Y
+    return Y
 
 
 # for interval
-def higher(X, Y, interval_hours):
+def higher(Y, interval_hours):
     reserve_hours = 1  # choose the first n number of biggest
     if interval_hours > reserve_hours:
         deadline = 0
@@ -173,11 +180,11 @@ def higher(X, Y, interval_hours):
                 higher_list = sorted(higher_list)
             Y[i] = np.array(higher_list).sum() / reserve_hours
         if deadline:
-            X = X[:deadline]
             Y = Y[:deadline]
-    return X, Y
+    return Y
 
-if is_training:
+
+if True:  # is_training:
     # reading data
     print('Reading data .. ')
     start_time = time.time()
@@ -203,11 +210,11 @@ if is_training:
     print('Reading data .. ok, ', end='')
     time_spent_printer(start_time, final_time)
 
-    print(len(X_train), 'train sequences')
-    print(len(X_test), 'test sequences')
+    # print(len(X_train), 'train sequences')
+    # print(len(X_test), 'test sequences')
 
-    if (len(X_train) < time_steps) or (len(X_test) < time_steps):
-        input('time_steps(%d) too long.' % time_steps)
+    # if (len(X_train) < time_steps) or (len(X_test) < time_steps):
+    #     input('time_steps(%d) too long.' % time_steps)
 
     # normalize
     print('Normalize ..')
@@ -256,48 +263,68 @@ if is_training:
     # --
 
     print('Constructing time series data set ..')
-    # for rnn
-    X_rnn_train = construct_time_steps(X_train[:-1], time_steps)
-    X_rnn_test = construct_time_steps(X_test[:-1], time_steps)
+    # for layer 1
+    X_train = construct_time_steps(X_train[:-1], layer1_time_steps)
+    X_test = construct_time_steps(X_test[:-1], layer1_time_steps)
 
-    X_train = concatenate_time_steps(X_train[:-1], time_steps)
-    Y_train = Y_train[time_steps:]
+    Y_train = Y_train[layer1_time_steps:]
+    Y_test = Y_test[layer1_time_steps:]
 
-    X_test = concatenate_time_steps(X_test[:-1], time_steps)
-    Y_test = Y_test[time_steps:]
+    # for layer 2
+    X_train = construct_second_time_steps(X_train, layer1_time_steps, layer2_time_steps)
+    X_test = construct_second_time_steps(X_test, layer1_time_steps, layer2_time_steps)
 
-    [X_train, Y_train] = higher(X_train, Y_train, interval_hours)
-    [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    Y_train = Y_train[layer1_time_steps*layer2_time_steps:]
+    Y_test = Y_test[layer1_time_steps*layer2_time_steps:]
 
-    X_rnn_train = X_rnn_train[:len(X_train)]
-    X_rnn_test = X_rnn_test[:len(X_test)]
+    # --
+
+    Y_real = np.copy(Y_test)
+
+    # Y_train = higher(Y_train, interval_hours)
+    # Y_test = higher(Y_test, interval_hours)
+    Y_train = Y_train[interval_hours-1:]
+    Y_test = Y_test[interval_hours-1:]
+    Y_real = Y_real[interval_hours - 1:]
+
+    train_seq_len = np.min([len(Y_train), len(X_train)])
+    test_seq_len = np.min([len(Y_test), len(X_test)])
+
+    print(len(X_train), 'train sequences')
+    print(len(X_test), 'test sequences')
+
+    X_train = X_train[:train_seq_len]
+    X_test = X_test[:test_seq_len]
+
+    Y_train = Y_train[:train_seq_len]
+    Y_test = Y_test[:test_seq_len]
+    Y_real = Y_real[:test_seq_len]
 
     # delete data which have missing values
     i = 0
     while i < len(Y_test):
         if not(Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
             Y_test = np.delete(Y_test, i, 0)
+            Y_real = np.delete(Y_real, i, 0)
             X_test = np.delete(X_test, i, 0)
-            X_rnn_test = np.delete(X_rnn_test, i, 0)
             i = -1
         i += 1
     Y_test = np.array(Y_test, dtype=np.float)
+    Y_real = np.array(Y_real, dtype=np.float)
+
+    print('delete invalid testing data, remain ', len(X_test), 'test sequences')
 
     # --
 
-    X_rnn_train = np.array(X_rnn_train)
-    X_rnn_test = np.array(X_rnn_test)
     X_train = np.array(X_train)
-    Y_train = np.array(Y_train)
     X_test = np.array(X_test)
+    Y_train = np.array(Y_train)
 
-    np.random.seed(seed)
-    np.random.shuffle(X_train)
     np.random.seed(seed)
     np.random.shuffle(Y_train)
 
     np.random.seed(seed)
-    np.random.shuffle(X_rnn_train)
+    np.random.shuffle(X_train)
 
 else:  # is_training = false
     # mean and std
@@ -350,27 +377,46 @@ else:  # is_training = false
     # --
 
     print('Constructing time series data set ..')
-    X_rnn_test = construct_time_steps(X_test[:-1], time_steps)
-    X_test = concatenate_time_steps(X_test[:-1], time_steps)
-    Y_test = Y_test[time_steps:]
+    # for layer 1 -----------------------------------------------------------------------------------------------------------------
+    X_test = construct_time_steps(X_test[:-1], layer1_time_steps)
+    Y_test = Y_test[layer1_time_steps:]
 
-    [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    # for layer 2
+    X_test = construct_second_time_steps(X_test, layer1_time_steps, layer2_time_steps)
+    Y_test =Y_test[layer1_time_steps*layer2_time_steps:]
 
-    X_rnn_test = X_rnn_test[:len(X_test)]
+    # --
+    Y_real = np.copy(Y_test)
+
+    # Y_test = higher(Y_test, interval_hours)
+    Y_test = Y_test[interval_hours - 1:]
+    Y_real = Y_real[interval_hours - 1:]
+
+    test_seq_len = np.min([len(Y_test), len(X_test)])
+
+    print(len(X_test), 'test sequences')
+
+    X_test = X_test[:test_seq_len]
+
+    Y_test = Y_test[:test_seq_len]
+    Y_real = Y_real[:test_seq_len]
 
     # delete data which have missing values
     i = 0
     while i < len(Y_test):
         if not (Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
             Y_test = np.delete(Y_test, i, 0)
-            X_rnn_test = np.delete(X_rnn_test, i, 0)
+            Y_real = np.delete(Y_real, i, 0)
+            X_test = np.delete(X_test, i, 0)
             i = -1
         i += 1
     Y_test = np.array(Y_test, dtype=np.float)
 
+    print('delete invalid testing data, remain ', len(X_test), 'test sequences')
+
     # --
 
-    X_rnn_test = np.array(X_rnn_test)
+    X_test = np.array(X_test)
 
 
 # -- rnn --
@@ -380,47 +426,63 @@ filename = ("sa_DropoutLSTM_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
 print(filename)
 
-# Network Parameters
-time_steps = 12
-hidden_size = 20
-
-print("Expected args: p_W, p_U, p_dense, p_emb, weight_decay, batch_size")
-print("Using default args:")
-param = ["", "0.5", "0.5", "0.5", "0.5", "1e-6", "128"]
-args = [float(a) for a in param[1:]]
-print(args)
-p_W, p_U, p_dense, p_emb, weight_decay, batch_size = args
-batch_size = int(batch_size)
+p_dense = 0.5
+regularizer = float('1e-6')
+batch_size = 128
 
 # --
 
 print('Build rnn model...')
 start_time = time.time()
-rnn_model = Sequential()
+
+# input layer
+input_shape = (layer1_time_steps, input_size)
+rnn_model_input = list()
+for i in range(layer2_time_steps):
+    rnn_model_input.append(Input(shape=input_shape, dtype='float32'))
 
 # layer 1
-rnn_model.add(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
-                                 weights=None, gamma_regularizer=None, momentum=0.99, axis=-1,
-                                 input_shape=(time_steps, input_size)))
-rnn_model.add(LSTM(hidden_size, recurrent_activation='linear', kernel_regularizer=l2(weight_decay),
-                   recurrent_regularizer=l2(weight_decay), bias_regularizer=l2(weight_decay), recurrent_dropout=0.5))  # return_sequences=True
-rnn_model.add(Dropout(p_dense))
+rnn_model_layer1 = list()
+
+for i in range(layer2_time_steps):
+    rnn_model_layer1.append(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
+                                               gamma_initializer="one", weights=None, gamma_regularizer=None,
+                                               momentum=0.99, axis=-1)(rnn_model_input[i]))
+    # return_sequences=True
+    # recurrent_activation='relu', kernel_constraint=maxnorm(2.), recurrent_constraint=maxnorm(2.),
+    # bias_constraint=maxnorm(2.)
+    rnn_model_layer1[i] = LSTM(hidden_size1, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
+                               bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(
+        rnn_model_layer1[i])
+    rnn_model_layer1[i] = Dropout(p_dense)(rnn_model_layer1[i])
 
 # layer 2
-# rnn_model.add(BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
-#                                  gamma_init='one', gamma_regularizer=None, beta_regularizer=None))
-# rnn_model.add(LSTM(hidden_size, W_regularizer=l2(weight_decay), U_regularizer=l2(weight_decay),
-#                    b_regularizer=l2(weight_decay), dropout_W=p_W, dropout_U=p_U))
-# rnn_model.add(Dropout(p_dense))
+rnn_model_layer2 = concatenate(rnn_model_layer1)
+rnn_model_layer2 = Reshape((layer2_time_steps, hidden_size1))(rnn_model_layer2)
+
+rnn_model_layer2 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
+                                      weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(rnn_model_layer2)
+rnn_model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
+                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(
+    rnn_model_layer2)
+
+rnn_model_layer2 = Dropout(p_dense)(rnn_model_layer2)
 
 # output layer
-rnn_model.add(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
-                                 weights=None, gamma_regularizer=None, momentum=0.99, axis=-1))
-rnn_model.add(Dense(output_size, kernel_regularizer=l2(weight_decay), bias_regularizer=l2(weight_decay)))
+output_layer = rnn_model_layer2
+
+output_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
+                                  weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(output_layer)
+output_layer = Dense(output_size, kernel_regularizer=l2(regularizer), bias_regularizer=l2(regularizer))(output_layer)
+
+rnn_model = Model(inputs=rnn_model_input, outputs=output_layer)
+rnn_model.compile(loss=keras.losses.mean_squared_error,
+                  optimizer='adam',
+                  metrics=['accuracy'])
 
 # optimiser = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=False)
-optimiser = 'adam'
-rnn_model.compile(loss='mean_squared_error', optimizer=optimiser)
+# optimiser = 'adam'
+# rnn_model.compile(loss='mean_squared_error', optimizer=optimiser)
 
 final_time = time.time()
 time_spent_printer(start_time, final_time)
@@ -429,7 +491,11 @@ time_spent_printer(start_time, final_time)
 if is_training:
     print("Train...")
     start_time = time.time()
-    rnn_model.fit(X_rnn_train, Y_train, batch_size=batch_size, epochs=50)
+    rnn_model.fit([X_train[:, i, :, :] for i in range(layer2_time_steps)], Y_train,
+                  batch_size=batch_size,
+                  epochs=50,
+                  validation_data=([X_test[:, i, :, :] for i in range(layer2_time_steps)],
+                                   ((Y_test - mean_y_train) / std_y_train)))
 
     # Potentially save weights
     # rnn_model.save_weights(folder + filename, overwrite=True)
@@ -437,7 +503,7 @@ if is_training:
 
     final_time = time.time()
     time_spent_printer(start_time, final_time)
-    print('model saved')
+    print('model saved: ', filename)
 
 else:
     print('loading model ..')
@@ -445,7 +511,32 @@ else:
     # rnn_model.load_weights(folder + filename)
     rnn_model = keras.models.load_model(folder + filename)
 
-rnn_pred = rnn_model.predict(X_rnn_test, batch_size=500, verbose=1)
+rnn_pred = rnn_model.predict([X_test[:, i, :, :] for i in range(layer2_time_steps)])
 final_time = time.time()
 time_spent_printer(start_time, final_time)
 print('rmse(rnn): %.5f' % (np.mean((np.atleast_2d(Y_test).T - (mean_y_train + std_y_train * rnn_pred))**2, 0)**0.5))
+
+pred = mean_y_train + std_y_train * rnn_pred
+
+plt.plot(np.arange(len(pred)), Y_real[:len(pred)], c='gray')
+plt.plot(np.arange(len(pred)), Y_test[:len(pred)], c='mediumaquamarine')
+plt.plot(np.arange(len(pred)), pred, color='pink')
+plt.xticks(np.arange(0, len(pred), 24))
+plt.yticks(np.arange(0, max(Y_test), 10))
+plt.grid(True)
+plt.rc('axes', labelsize=4)
+plt.savefig(root_path + 'result/' + filename + '.png')
+plt.show()
+
+# -- check overfitting --
+
+train_pred = rnn_model.predict([X_train[:, i, :, :][-800:] for i in range(layer2_time_steps)])
+train_pred = mean_y_train + std_y_train * train_pred
+train_pred_target = mean_y_train + std_y_train * Y_train[-800:]
+plt.plot(np.arange(len(train_pred)), train_pred_target, color='pink')
+plt.plot(np.arange(len(train_pred)), train_pred, c='mediumaquamarine')
+plt.xticks(np.arange(0, len(train_pred), 24))
+plt.yticks(np.arange(0, max(train_pred), 10))
+plt.grid(True)
+plt.rc('axes', labelsize=4)
+plt.show()
