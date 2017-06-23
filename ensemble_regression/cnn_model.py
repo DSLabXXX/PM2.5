@@ -388,7 +388,7 @@ if is_training:
     for i in [6, 12, 18, 24]:
         first_layer_time = Conv2D(8, kernel_size=(i, input_size), activation='relu')(model_input_time)
         second_layer_time = Conv2D(4, kernel_size=(i, 1), activation='relu')(first_layer_time)
-        cnn_layer_time.append(Flatten()(first_layer_time))
+        cnn_layer_time.append(Flatten()(second_layer_time))
     cnn_model_time = concatenate(cnn_layer_time)
     cnn_model_time = Dropout(0.25)(cnn_model_time)
 
