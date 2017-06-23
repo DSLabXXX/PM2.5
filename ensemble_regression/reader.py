@@ -244,3 +244,15 @@ def construct_time_steps(X, n_steps):
                 y.append(X[i+j])
             Y.append(y)
     return Y
+
+
+def construct_second_time_steps(X, n_steps_layer1, n_steps_layer2):
+    length = len(X)
+    Y = list()
+    for i in range(length):
+        y = list()
+        if (i + n_steps_layer1 * n_steps_layer2) <= length:
+            for j in range(n_steps_layer2):
+                y.append(X[i + j*n_steps_layer1])
+            Y.append(y)
+    return Y
