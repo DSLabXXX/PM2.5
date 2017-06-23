@@ -7,8 +7,10 @@ import numpy as np
 import time
 import cPickle
 import os
+import matplotlib.pyplot as plt
 
 import xgboost as xgb
+from sklearn.ensemble import RandomForestRegressor
 
 from reader import read_data_sets, concatenate_time_steps
 from missing_value_processer import missing_check
@@ -63,31 +65,31 @@ pollution_site_map = {
 high_alert = 53.5
 low_alert = 35.5
 
-# local = '北部'
-# city = '台北'
-# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-# target_site = '中山'
+local = '北部'
+city = '台北'
+site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+target_site = '萬華'
+
+training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = ['2016', '2016']
+
+training_duration = ['1/1', '10/31']
+testing_duration = ['12/1', '12/31']
+interval_hours = 24  # predict the label of average data of many hours later, default is 1
+is_training = True
+
+# local = os.sys.argv[1]
+# city = os.sys.argv[2]
+# site_list = pollution_site_map[local][city]
+# target_site = os.sys.argv[3]
 #
-# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = ['2017', '2017']
+# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
 #
-# training_duration = ['1/1', '12/31']
-# testing_duration = ['1/1', '1/31']
-# interval_hours = 6  # predict the label of average data of many hours later, default is 1
-# is_training = True
-
-local = os.sys.argv[1]
-city = os.sys.argv[2]
-site_list = pollution_site_map[local][city]
-target_site = os.sys.argv[3]
-
-training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
-
-training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
 
 target_kind = 'PM2.5'
 
@@ -127,8 +129,9 @@ print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], t
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
 print('Target: %s' % target_kind)
 
+
 # for interval
-def ave(X, Y, interval_hours):
+def ave(Y, interval_hours):
     reserve_hours = interval_hours - 1
     deadline = 0
     for i in range(len(Y)):
@@ -140,13 +143,12 @@ def ave(X, Y, interval_hours):
             Y[i] += Y[i + j + 1]
         Y[i] /= interval_hours
     if deadline:
-        X = X[:deadline]
         Y = Y[:deadline]
-    return X, Y
+    return Y
 
 
 # for interval
-def higher(X, Y, interval_hours):
+def higher(Y, interval_hours):
     reserve_hours = 1  # choose the first n number of biggest
     if interval_hours > reserve_hours:
         deadline = 0
@@ -164,9 +166,9 @@ def higher(X, Y, interval_hours):
                 higher_list = sorted(higher_list)
             Y[i] = np.array(higher_list).sum() / reserve_hours
         if deadline:
-            X = X[:deadline]
             Y = Y[:deadline]
-    return X, Y
+    return Y
+
 
 if is_training:
     # reading data
@@ -253,18 +255,41 @@ if is_training:
     X_test = concatenate_time_steps(X_test[:-1], time_steps)
     Y_test = Y_test[time_steps:]
 
-    [X_train, Y_train] = higher(X_train, Y_train, interval_hours)
-    [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    Y_real = np.copy(Y_test)
+
+    Y_train = higher(Y_train, interval_hours)
+    Y_test = higher(Y_test, interval_hours)
+    # Y_train = Y_train[interval_hours - 1:]
+    # Y_test = Y_test[interval_hours - 1:]
+    Y_real = Y_real[interval_hours - 1:]
+
+    train_seq_len = np.min([len(Y_train), len(X_train)])
+    test_seq_len = np.min([len(Y_test), len(X_test)])
+
+    print(len(X_train), 'train sequences')
+    print(len(X_test), 'test sequences')
+
+    X_train = X_train[:train_seq_len]
+    X_test = X_test[:test_seq_len]
+
+    Y_train = Y_train[:train_seq_len]
+
+    Y_test = Y_test[:test_seq_len]
+    Y_real = Y_real[:test_seq_len]
 
     # delete data which have missing values
     i = 0
     while i < len(Y_test):
-        if not(Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
+        if (not(Y_test[i] > -10000) or (not(Y_real[i] > -10000))):  # check missing or not, if Y_test[i] is missing, then this instruction will return True
             Y_test = np.delete(Y_test, i, 0)
+            Y_real = np.delete(Y_real, i, 0)
             X_test = np.delete(X_test, i, 0)
             i = -1
         i += 1
     Y_test = np.array(Y_test, dtype=np.float)
+    Y_real = np.array(Y_real, dtype=np.float)
+
+    print('delete invalid testing data, remain ', len(X_test), 'test sequences')
 
     # --
 
@@ -277,7 +302,6 @@ if is_training:
     np.random.seed(seed)
     np.random.shuffle(Y_train)
 
-    np.random.seed(seed)
 
 else:  # is_training = false
     # mean and std
@@ -333,22 +357,37 @@ else:  # is_training = false
     X_test = concatenate_time_steps(X_test[:-1], time_steps)
     Y_test = Y_test[time_steps:]
 
-    [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    Y_real = np.copy(Y_test)
+
+    Y_test = higher(Y_test, interval_hours)
+    # Y_test = Y_test[interval_hours - 1:]
+    Y_real = Y_real[interval_hours - 1:]
+
+    test_seq_len = np.min([len(Y_test), len(X_test)])
+
+    print(len(X_test), 'test sequences')
+
+    X_test = X_test[:test_seq_len]
+
+    Y_test = Y_test[:test_seq_len]
+    Y_real = Y_real[:test_seq_len]
 
     # delete data which have missing values
     i = 0
     while i < len(Y_test):
-        if not (Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
+        if not (not(Y_test[i] > -10000) or (not(Y_real[i] > -10000))):  # check missing or not, if Y_test[i] is missing, then this command will return True
             Y_test = np.delete(Y_test, i, 0)
+            Y_real = np.delete(Y_real, i, 0)
             X_test = np.delete(X_test, i, 0)
-            X_rnn_test = np.delete(X_rnn_test, i, 0)
             i = -1
         i += 1
     Y_test = np.array(Y_test, dtype=np.float)
+    Y_real = np.array(Y_real, dtype=np.float)
+
+    print('delete invalid testing data, remain ', len(X_test), 'test sequences')
 
     # --
 
-    X_rnn_test = np.array(X_rnn_test)
     X_test = np.array(X_test)
 
 # -- xgboost --
@@ -378,16 +417,47 @@ print('rmse(xgboost): %.5f' % (np.mean((Y_test - (mean_y_train + std_y_train * x
 # -- random forest --
 # print('- random forest -')
 #
-# filename = ("random_forest_%s_training_%s_m%s_to_%s_m%s_interval_%s"
-#             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
+# filename = ("random_forest_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+#             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
 # print(filename)
 #
-# rf_model = RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
-#                                  max_features='auto', max_leaf_nodes=None, min_samples_leaf=2,
-#                                  min_samples_split=10, min_weight_fraction_leaf=0.0,
-#                                  n_estimators=10, n_jobs=5, oob_score=False, random_state=None,
-#                                  verbose=0, warm_start=False)
-# rf_model.fit(X_train, Y_train)
+# if is_training:
+#     rf_model = RandomForestRegressor(bootstrap=True, criterion='mse', max_depth=None,
+#                                      max_features='auto', max_leaf_nodes=None, min_samples_leaf=2,
+#                                      min_samples_split=10, min_weight_fraction_leaf=0.0,
+#                                      n_estimators=10, n_jobs=5, oob_score=False, random_state=None,
+#                                      verbose=0, warm_start=False)
+#     rf_model.fit(X_train, Y_train)
+#
+#     fw = open(folder + filename, 'wb')
+#     cPickle.dump(rf_model, fw)
+#     fw.close()
+#     print('model saved')
+# else:
+#     fr = open(folder + filename, 'rb')
+#     rf_model = cPickle.load(fr)
+#     fr.close()
+#
 # rf_pred = rf_model.predict(X_test)
 #
 # print('rmse(random forest): %.5f' % (np.mean((Y_test - (mean_y_train + std_y_train * rf_pred))**2, 0)**0.5))
+
+# --
+filename = ("xgboost_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
+
+xg_pred = mean_y_train + std_y_train * xgb_pred
+# rf_pred = mean_y_train + std_y_train * rf_pred
+
+# plt_length = np.min([len(Y_real), len(Y_test), len(xg_pred), len(rf_pred)])
+plt_length = np.min([len(Y_real), len(Y_test), len(xg_pred)])
+plt.plot(np.arange(plt_length), Y_real[:plt_length], c='gray')
+plt.plot(np.arange(plt_length), Y_test[:plt_length], c='mediumaquamarine')
+plt.plot(np.arange(plt_length), xg_pred[:plt_length], color='palevioletred')
+# plt.plot(np.arange(plt_length), rf_pred[:plt_length], color='pink')
+plt.xticks(np.arange(0, plt_length, 24))
+plt.yticks(np.arange(0, max(Y_test), 10))
+plt.grid(True)
+plt.rc('axes', labelsize=4)
+plt.savefig(root_path + 'result/' + filename + '.png')
+# plt.show()
