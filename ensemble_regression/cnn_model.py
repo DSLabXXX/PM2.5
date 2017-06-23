@@ -12,17 +12,12 @@ import cPickle
 import matplotlib.pyplot as plt
 from scipy.fftpack import fft, ifft
 
-# from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.models import Sequential
 from keras.layers import Input, Conv2D, MaxPooling2D, concatenate
 from keras.layers.core import Dense, Dropout, Flatten
 from keras import backend as K
 from keras.layers.normalization import BatchNormalization
 from keras.models import Model
-# from keras.layers.embeddings import Embedding
-# from keras.layers.recurrent import LSTM  # , GRU, SimpleRNN
-# from keras.regularizers import l2
-# from keras.layers.normalization import BatchNormalization
 
 from reader import read_data_sets, construct_time_steps
 from missing_value_processer import missing_check
@@ -73,31 +68,33 @@ pollution_site_map = {
 }
 
 
-local = '北部'
-city = '台北'
-site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-target_site = '萬華'
-
-training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = ['2016', '2016']
-
-training_duration = ['1/1', '6/30']
-testing_duration = ['11/1', '12/31']
-interval_hours = 24  # predict the label of average data of many hours later, default is 1
-is_training = True
-
-# local = os.sys.argv[1]
-# city = os.sys.argv[2]
-# site_list = pollution_site_map[local][city]
-# target_site = os.sys.argv[3]
+# local = '北部'
+# city = '台北'
+# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+# target_site = '萬華'
 #
-# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = ['2016', '2016']
 #
-# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = ['1/1', '10/31']
+# testing_duration = ['11/1', '12/31']
+# interval_hours = 24  # predict the label of average data of many hours later, default is 1
+# is_training = False
+# strategy = 'highest'  # highest or shift
+
+local = os.sys.argv[1]
+city = os.sys.argv[2]
+site_list = pollution_site_map[local][city]
+target_site = os.sys.argv[3]
+
+training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+
+training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+strategy = os.sys.argv[10]
 
 # clear redundancy work
 if training_year[0] == training_year[1]:
@@ -136,9 +133,10 @@ num_classes = 1
 testing_month = testing_duration[0][:testing_duration[0].index('/')]
 training_begining = training_duration[0][:training_duration[0].index('/')]
 training_deadline = training_duration[-1][:training_duration[-1].index('/')]
-model_folder = root_path + "model/%s/" % local
-filename = ("CNN_%s_training_%s_m%s_to_%s_m%s_interval_%s"
-            % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
+model_folder = root_path + "model/%s/%s/%sh/" % (local, city, interval_hours)
+filename = ("CNN_%s_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+            % (strategy, target_site, training_year[0], training_begining, training_year[-1], training_deadline,
+               interval_hours, target_kind))
 print(filename)
 print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], training_year[-1], training_duration[-1]))
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
@@ -210,10 +208,10 @@ if not std_y_train:
 Y_train = [(y - mean_y_train) / std_y_train for y in Y_train]
 print('mean_y_train: %f  std_y_train: %f' % (mean_y_train, std_y_train))
 
-fw = open(model_folder + "/%s_parameter.pickle" % target_site, 'wb')
-cPickle.dump(str(mean_y_train) + ',' +
-             str(std_y_train), fw)
-fw.close()
+# fw = open(model_folder + "/%s_parameter.pickle" % target_site, 'wb')
+# cPickle.dump(str(mean_y_train) + ',' +
+#              str(std_y_train), fw)
+# fw.close()
 
 # --
 print('Constructing time series data set ..', end='')
@@ -225,7 +223,7 @@ Y_test = Y_test[time_steps:]
 print('ok')
 
 
-def ave(X, Y, interval_hours):
+def ave(Y, interval_hours):
     reserve_hours = interval_hours - 1
     deadline = 0
     for i in range(len(Y)):
@@ -237,12 +235,11 @@ def ave(X, Y, interval_hours):
             Y[i] += Y[i + j + 1]
         Y[i] /= interval_hours
     if deadline:
-        X = X[:deadline]
         Y = Y[:deadline]
-    return X, Y
+    return Y
 
 
-def higher(X, Y, interval_hours):
+def higher(Y, interval_hours):
     reserve_hours = 1  # choose the first n number of biggest
     if interval_hours > reserve_hours:
         deadline = 0
@@ -260,12 +257,28 @@ def higher(X, Y, interval_hours):
                 higher_list = sorted(higher_list)
             Y[i] = np.array(higher_list).sum()/reserve_hours
         if deadline:
-            X = X[:deadline]
             Y = Y[:deadline]
-    return X, Y
+    return Y
 
-[X_train, Y_train] = higher(X_train, Y_train, interval_hours)
-[X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+
+Y_real = np.copy(Y_test)
+if strategy == 'highest':
+    Y_train = higher(Y_train, interval_hours)
+    Y_test = higher(Y_test, interval_hours)
+elif strategy == 'shift':
+    Y_train = Y_train[interval_hours-1:]
+    Y_test = Y_test[interval_hours-1:]
+Y_real = Y_real[interval_hours - 1:]
+
+train_seq_len = np.min([len(Y_train), len(X_train)])
+test_seq_len = np.min([len(Y_test), len(X_test)])
+
+X_train = X_train[:train_seq_len]
+X_test = X_test[:test_seq_len]
+
+Y_train = Y_train[:train_seq_len]
+Y_test = Y_test[:test_seq_len]
+Y_real = Y_real[:test_seq_len]
 
 print(len(X_train), 'train sequences')
 print(len(X_test), 'test sequences')
@@ -308,11 +321,15 @@ i = 0
 while i < len(Y_test):
     if not(Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
         Y_test = np.delete(Y_test, i, 0)
+        Y_real = np.delete(Y_real, i, 0)
         X_test = np.delete(X_test, i, 0)
         X_test_freq = np.delete(X_test_freq, i, 0)
         i = -1
     i += 1
 Y_test = np.array(Y_test, dtype=np.float)
+Y_real = np.array(Y_real, dtype=np.float)
+
+print('delete invalid testing data, remain ', len(X_test), 'test sequences')
 
 X_train = np.array(X_train)
 X_train_freq = np.array(X_train_freq)
@@ -368,16 +385,16 @@ if is_training:
     # time domain
     model_input_time = Input(shape=input_shape, dtype='float32')
     cnn_layer_time = []
-    for i in [3, 6, 9, 12, 24]:
-        first_layer_time = Conv2D(64, kernel_size=(i, input_size), activation='relu')(model_input_time)
-        second_layer_time = Conv2D(32, kernel_size=(i, 1), activation='relu')(first_layer_time)
-        cnn_layer_time.append(Flatten()(second_layer_time))
+    for i in [6, 12, 18, 24]:
+        first_layer_time = Conv2D(8, kernel_size=(i, input_size), activation='relu')(model_input_time)
+        second_layer_time = Conv2D(4, kernel_size=(i, 1), activation='relu')(first_layer_time)
+        cnn_layer_time.append(Flatten()(first_layer_time))
     cnn_model_time = concatenate(cnn_layer_time)
     cnn_model_time = Dropout(0.25)(cnn_model_time)
 
     cnn_model_time = BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
                                         gamma_init='one', gamma_regularizer=None, beta_regularizer=None)(cnn_model_time)
-    cnn_model_time = Dense(64, activation='relu')(cnn_model_time)
+    cnn_model_time = Dense(4, activation='relu')(cnn_model_time)
     cnn_model_time = Dropout(0.5)(cnn_model_time)
 
     highway_time = Flatten()(model_input_time)
@@ -385,20 +402,20 @@ if is_training:
                                       gamma_init='one', gamma_regularizer=None, beta_regularizer=None)(highway_time)
     cnn_model_time = concatenate([highway_time, cnn_model_time])
     # cnn_model_time = Dense(num_classes)(cnn_model_time)
-    cnn_model_time = Dense(64, activation='relu')(cnn_model_time)
+    cnn_model_time = Dense(2, activation='relu')(cnn_model_time)
 
     # frequency domain
     model_input_freq = Input(shape=freq_input_shape, dtype='float32')
-    first_layer_freq = Conv2D(64, kernel_size=(i, freq_input_size), activation='relu')(model_input_freq)
+    first_layer_freq = Conv2D(8, kernel_size=(i, freq_input_size), activation='relu')(model_input_freq)
     cnn_model_freq = Flatten()(first_layer_freq)
     cnn_model_freq = Dropout(0.25)(cnn_model_freq)
 
     cnn_model_freq = BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
                                         gamma_init='one', gamma_regularizer=None, beta_regularizer=None)(cnn_model_freq)
-    cnn_model_freq = Dense(64, activation='relu')(cnn_model_freq)
+    cnn_model_freq = Dense(4, activation='relu')(cnn_model_freq)
     cnn_model_freq = Dropout(0.5)(cnn_model_freq)
 
-    cnn_model_freq = Dense(64, activation='relu')(cnn_model_freq)
+    cnn_model_freq = Dense(2, activation='relu')(cnn_model_freq)
     cnn_model_freq = Dropout(0.5)(cnn_model_freq)
 
     # concatenation
@@ -438,15 +455,16 @@ if is_training:
     print('Test accuracy:', score[1])
 
     model.save(model_folder + filename, overwrite=True)
-    print('save model .. ok')
+    model.save(model_folder + 'backup/' + filename, overwrite=True)
+    print('model saved: ', filename)
 else:
     model = keras.models.load_model(model_folder + filename)
 
-    fr = open(model_folder + "%s_parameter.pickle" % target_site, 'rb')
-    [mean_y_train, std_y_train] = (cPickle.load(fr)).split(',')
-    mean_y_train = float(mean_y_train)
-    std_y_train = float(std_y_train)
-    fr.close()
+    # fr = open(model_folder + "%s_parameter.pickle" % target_site, 'rb')
+    # [mean_y_train, std_y_train] = (cPickle.load(fr)).split(',')
+    # mean_y_train = float(mean_y_train)
+    # std_y_train = float(std_y_train)
+    # fr.close()
 
 print('prediction ..')
 
@@ -455,9 +473,10 @@ pred = mean_y_train + std_y_train * pred
 
 print('rmse: %.5f' % (np.mean((Y_test - pred.reshape([len(Y_test)]))**2, 0)**0.5))
 
-with open(root_path + 'result/' + filename + '.ods', 'wt') as f:
-    f.write('rmse: %f' % (np.sqrt(np.mean((Y_test - pred) ** 2))))
+# with open(root_path + 'result/' + filename + '.ods', 'wt') as f:
+#     f.write('rmse: %f' % (np.sqrt(np.mean((Y_test - pred) ** 2))))
 
+plt.plot(np.arange(len(pred)), Y_real[:len(pred)], c='lightblue')
 plt.plot(np.arange(len(pred)), Y_test[:len(pred)], c='gray')
 plt.plot(np.arange(len(pred)), pred, color='pink')
 plt.xticks(np.arange(0, len(pred), 24))
@@ -465,4 +484,17 @@ plt.yticks(np.arange(0, max(Y_test), 10))
 plt.grid(True)
 plt.rc('axes', labelsize=4)
 plt.savefig(root_path + 'result/' + filename + '.png')
+# plt.show()
+
+# -- check overfitting --
+
+# train_pred = model.predict([X_train[-800:], X_train_freq[-800:]])
+# train_pred = mean_y_train + std_y_train * train_pred
+# train_pred_target = mean_y_train + std_y_train * Y_train[-800:]
+# plt.plot(np.arange(len(train_pred)), train_pred, c='gray')
+# plt.plot(np.arange(len(train_pred)), train_pred_target, color='pink')
+# plt.xticks(np.arange(0, len(train_pred), 24))
+# plt.yticks(np.arange(0, max(train_pred), 10))
+# plt.grid(True)
+# plt.rc('axes', labelsize=4)
 # plt.show()
