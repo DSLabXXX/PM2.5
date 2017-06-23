@@ -1,0 +1,27 @@
+#!/bin/bash
+
+rnn_model=/media/clliao/006a3168-df49-4b0a-a874-891877a88870/clliao/workspace/python/weather_prediction/ensemble_regression/cnn_model.py
+training_year=2014-2016
+testing_year=2016-2016
+training_duration=1/1-10/31
+testing_duration=11/1-12/31
+is_training=True
+local=北部
+city=新北
+for site in 板橋 林口
+do
+    for interval in 24
+    do
+        echo $file_path
+        python $rnn_model $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+    done
+done
+city=台北
+for site in 中山 古亭 士林 松山 萬華
+do
+    for interval in 24
+    do
+        echo $file_path
+        python $rnn_model $local $city $site $training_year $testing_year $training_duration $testing_duration $interval $is_training
+    done
+done
