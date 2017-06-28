@@ -127,7 +127,7 @@ for i in range(rangeofYear):
 pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']  # , 'AMB_TEMP', 'RH'
 data_update = False
 epochs = 50
-batch_size = 1024
+batch_size = 512
 p_dense = 0.5
 regularizer = float('1e-6')
 seed = 0
@@ -153,6 +153,13 @@ fourier_time_range = 24 * 14
 fourier_time_shift = 24 * 7
 freq_input_size = len(site_list)*len(pollution_kind)
 total_time_steps = layer1_time_steps*layer2_time_steps
+
+if total_time_steps < fourier_time_range:
+    print('time steps error(1)')
+    exit()
+if ((total_time_steps-fourier_time_range) % fourier_time_shift) != 0:
+    print('time steps error(2)')
+    exit()
 
 # --
 
@@ -284,7 +291,6 @@ Y_test = np.array(Y_test, dtype=np.float)
 
 # --
 
-
 print('Constructing time series data set ..')
 
 
@@ -322,8 +328,8 @@ Y_test = Y_test[layer1_time_steps:]
 X_train = construct_second_time_steps(X_train, layer1_time_steps, layer2_time_steps)
 X_test = construct_second_time_steps(X_test, layer1_time_steps, layer2_time_steps)
 
-Y_train = Y_train[layer1_time_steps*layer2_time_steps:]
-Y_test = Y_test[layer1_time_steps*layer2_time_steps:]
+Y_train = Y_train[layer1_time_steps*(layer2_time_steps-1):]
+Y_test = Y_test[layer1_time_steps*(layer2_time_steps-1):]
 
 # --
 
@@ -333,18 +339,18 @@ Y_real = np.copy(Y_test)
 # Y_test = higher(Y_test, interval_hours)
 Y_train = Y_train[interval_hours-1:]
 Y_test = Y_test[interval_hours-1:]
-Y_real = Y_real[interval_hours - 1:]
+Y_real = Y_real[interval_hours-1:]
 
-train_seq_len = np.min([len(Y_train), len(X_train)])
-test_seq_len = np.min([len(Y_test), len(X_test)])
+train_seq_len = np.min([len(Y_train), len(X_train), len(X_train_freq)])
+test_seq_len = np.min([len(Y_test), len(X_test), len(X_test_freq)])
 
 # print(len(X_train), 'train sequences')
 # print(len(X_test), 'test sequences')
 
 X_train = X_train[:train_seq_len]
 X_test = X_test[:test_seq_len]
-X_train_freq[:train_seq_len]
-X_test_freq[:test_seq_len]
+X_train_freq = X_train_freq[:train_seq_len]
+X_test_freq = X_test_freq[:test_seq_len]
 
 Y_train = Y_train[:train_seq_len]
 Y_test = Y_test[:test_seq_len]
@@ -375,6 +381,7 @@ while i < len(Y_test):
         Y_test = np.delete(Y_test, i, 0)
         Y_real = np.delete(Y_real, i, 0)
         X_test = np.delete(X_test, i, 0)
+        X_test_freq = np.delete(X_test_freq, i, 0)
         i = -1
     i += 1
 Y_test = np.array(Y_test, dtype=np.float)
@@ -455,7 +462,7 @@ Y_train = np.array(Y_train)
 #
 #     # for layer 2
 #     X_test = construct_second_time_steps(X_test, layer1_time_steps, layer2_time_steps)
-#     Y_test =Y_test[layer1_time_steps*layer2_time_steps:]
+#     Y_test = Y_test[layer1_time_steps*(layer2_time_steps-1):]
 #
 #     # --
 #     Y_real = np.copy(Y_test)
@@ -580,20 +587,20 @@ model_layer2 = Dropout(p_dense)(model_layer2)
 # -- frequence layer --
 model_input_freq = Input(shape=freq_input_shape, dtype='float32')
 first_layer_freq = Conv2D(8, kernel_size=(i, freq_input_size), activation='relu')(model_input_freq)
-cnn_model_freq = Flatten()(first_layer_freq)
-cnn_model_freq = Dropout(0.25)(cnn_model_freq)
+model_freq = Flatten()(first_layer_freq)
+model_freq = Dropout(0.25)(model_freq)
 
-cnn_model_freq = BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
-                                    gamma_init='one', gamma_regularizer=None, beta_regularizer=None)(cnn_model_freq)
-cnn_model_freq = Dense(4, activation='relu')(cnn_model_freq)
-cnn_model_freq = Dropout(0.5)(cnn_model_freq)
+model_freq = BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
+                                    gamma_init='one', gamma_regularizer=None, beta_regularizer=None)(model_freq)
+model_freq = Dense(4, activation='relu')(model_freq)
+model_freq = Dropout(0.5)(model_freq)
 
-cnn_model_freq = Dense(2, activation='relu')(cnn_model_freq)
-cnn_model_freq = Dropout(0.5)(cnn_model_freq)
+model_freq = Dense(2, activation='relu')(model_freq)
+model_freq = Dropout(0.5)(model_freq)
 
 
 # -- output layer --
-output_layer = concatenate([model_layer2, cnn_model_freq])  # concatenation
+output_layer = concatenate([model_layer2, model_freq])  # concatenation
 # output_layer = model_layer2
 
 output_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
@@ -606,8 +613,9 @@ output_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_ini
 output_layer = Dense(output_layer2_size, kernel_regularizer=l2(regularizer), bias_regularizer=l2(regularizer))(output_layer)
 
 # --
-
-rnn_model = Model(inputs=[rnn_model_input, model_input_freq], outputs=output_layer)
+model_input = rnn_model_input
+model_input.append(model_input_freq)
+rnn_model = Model(inputs=rnn_model_input, outputs=output_layer)
 rnn_model.compile(loss=keras.losses.mean_squared_error,
                   optimizer='adam',
                   metrics=['accuracy'])

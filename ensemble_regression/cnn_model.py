@@ -79,8 +79,8 @@ testing_year = ['2016', '2016']
 training_duration = ['1/1', '10/31']
 testing_duration = ['11/1', '12/31']
 interval_hours = 24  # predict the label of average data of many hours later, default is 1
-is_training = False
-strategy = 'highest'  # highest or shift
+is_training = True
+strategy = 'shift'  # highest or shift
 
 # local = os.sys.argv[1]
 # city = os.sys.argv[2]
@@ -116,7 +116,7 @@ pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']
 target_kind = 'PM2.5'
 data_update = False
 epochs = 50
-batch_size = 64
+batch_size = 128
 seed = 0
 
 
