@@ -67,19 +67,20 @@ def pollution_to_pollution_no(pollution):
 
 def observe(y_d_h_data, observe_year, observe_month, observe_city, observe_kind, observe_feature, target_feature):
     if observe_month == 1 or observe_month == 3 or observe_month == 5 or observe_month == 7 or observe_month == 8 or observe_month == 10 or observe_month == 12:
-        feature_vector = np.arange(31 * 24)
-        target_vector = np.arange(31 * 24)
+        feature_vector = np.zeros(31 * 24)
+        target_vector = np.zeros(31 * 24)
     elif observe_month == 4 or observe_month == 6 or observe_month == 9 or observe_month == 11:
-        feature_vector = np.arange(30 * 24)
-        target_vector = np.arange(30 * 24)
+        feature_vector = np.zeros(30 * 24)
+        target_vector = np.zeros(30 * 24)
     elif observe_month == 2:
         if '2/29' in y_d_h_data[str(observe_year)]:
-            feature_vector = np.arange(29 * 24)
-            target_vector = np.arange(29 * 24)
+            feature_vector = np.zeros(29 * 24)
+            target_vector = np.zeros(29 * 24)
         else:
-            feature_vector = np.arange(28 * 24)
-            target_vector = np.arange(28 * 24)
+            feature_vector = np.zeros(28 * 24)
+            target_vector = np.zeros(28 * 24)
 
+    counter = 0
     for date in y_d_h_data[str(observe_year)].keys():
         month = int(date[:date.index('/')])
         day = int(date[date.index('/')+1:])
@@ -99,15 +100,24 @@ def observe(y_d_h_data, observe_year, observe_month, observe_city, observe_kind,
                 try:
                     data = float(data)
                 except:
-                    data = -10
+                    # data = -2
+                    if counter != 0:
+                        data = np.sum(feature_vector)/counter
+                    else:
+                        data = -1
 
                 try:
                     target_data = float(target_data)
                 except:
-                    target_data = -10
+                    # target_data = -2
+                    if counter != 0:
+                        target_data = np.sum(target_vector)/counter
+                    else:
+                        data = -1
 
                 feature_vector[((day - 1) * 24) + hours] = data
                 target_vector[((day - 1) * 24) + hours] = target_data
+                counter += 1
     return target_vector, feature_vector
 
 
@@ -124,10 +134,10 @@ def correlation(x, y):
 
 observe_year = 2017
 observe_month_list = [1]
-observe_city = '左營'  # 左營 萬華
+observe_city = '萬華'  # 左營 萬華
 observe_kind = 'pollution'  # pollution / weather
-observe_feature = 'AMB_TEMP'  # 'O3' 'AMB_TEMP' 'RH' 'WIND_SPEED'     'NO' 'NO2'
-target_feature = 'O3'  # os.sys.argv[1]  # 'O3'
+observe_feature = 'WIND_SPEED'  # 'PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC'
+target_feature = 'NO2'  # os.sys.argv[1]  # 'O3'
 
 y_d_h_data = data_reader(observe_year, observe_year)
 
