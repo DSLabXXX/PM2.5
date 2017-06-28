@@ -83,7 +83,7 @@ training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014
 testing_year = ['2016', '2016']
 
 training_duration = ['1/1', '10/31']
-testing_duration = ['12/1', '12/31']
+testing_duration = ['11/15', '12/31']
 interval_hours = 24  # predict the label of average data of many hours later, default is 1
 is_training = True
 
@@ -120,14 +120,16 @@ for i in range(rangeofYear):
 # WIND_DIREC is a specific feature, that need to be processed, and it can only be element of input vector now.
 pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']  # , 'AMB_TEMP', 'RH'
 data_update = False
-# batch_size = 24 * 7
+p_dense = 0.5
+regularizer = float('1e-6')
+batch_size = 1024
 seed = 0
 
 # Network Parameters
 input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC' in pollution_kind else (len(site_list)*len(pollution_kind))
 
 layer1_time_steps = 24  # 24 hours a day
-layer2_time_steps = 7  # 7 days
+layer2_time_steps = 14  # 7 days
 
 hidden_size1 = 8
 hidden_size2 = 16
@@ -274,8 +276,8 @@ if True:  # is_training:
     X_train = construct_second_time_steps(X_train, layer1_time_steps, layer2_time_steps)
     X_test = construct_second_time_steps(X_test, layer1_time_steps, layer2_time_steps)
 
-    Y_train = Y_train[layer1_time_steps*layer2_time_steps:]
-    Y_test = Y_test[layer1_time_steps*layer2_time_steps:]
+    Y_train = Y_train[layer1_time_steps*(layer2_time_steps-1):]
+    Y_test = Y_test[layer1_time_steps*(layer2_time_steps-1):]
 
     # --
 
@@ -383,7 +385,7 @@ else:  # is_training = false
 
     # for layer 2
     X_test = construct_second_time_steps(X_test, layer1_time_steps, layer2_time_steps)
-    Y_test =Y_test[layer1_time_steps*layer2_time_steps:]
+    Y_test =Y_test[layer1_time_steps*(layer2_time_steps-1):]
 
     # --
     Y_real = np.copy(Y_test)
@@ -426,9 +428,6 @@ filename = ("sa_DropoutLSTM_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
 print(filename)
 
-p_dense = 0.5
-regularizer = float('1e-6')
-batch_size = 128
 
 # --
 
@@ -463,7 +462,7 @@ rnn_model_layer2 = Reshape((layer2_time_steps, hidden_size1))(rnn_model_layer2)
 rnn_model_layer2 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
                                       weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(rnn_model_layer2)
 rnn_model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(rnn_model_layer2)
+                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5, return_sequences=True)(rnn_model_layer2)
 
 rnn_model_layer2 = Dropout(p_dense)(rnn_model_layer2)
 
