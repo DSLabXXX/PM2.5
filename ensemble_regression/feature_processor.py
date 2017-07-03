@@ -1,4 +1,5 @@
 import numpy as np
+import datetime
 
 
 def time_to_angle(time):  # year/month/date
@@ -48,6 +49,10 @@ def time_to_angle(time):  # year/month/date
         input('Please type in any key to continue.')
 
     return year, month, date, angle
+
+
+def weekday(y, m, d):  # year/month/date
+    return datetime.datetime.weekday(datetime.date(y, m, d))
 
 
 def data_coordinate_angle(angle):
