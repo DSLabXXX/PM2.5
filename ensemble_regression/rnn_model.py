@@ -24,7 +24,7 @@ from keras.models import Model
 from reader import read_data_sets, concatenate_time_steps, construct_time_steps, construct_second_time_steps
 from missing_value_processer import missing_check
 from feature_processor import data_coordinate_angle
-from config import root
+from config import root, site_map
 
 root_path = root()
 
@@ -37,68 +37,49 @@ def time_spent_printer(start_time, final_time):
     print((int(spent_time) % 3600) % 60, 'seconds')
 
 
-pollution_site_map = {
-    '中部': {'台中': ['大里', '忠明', '沙鹿', '西屯', '豐原'],  # 5
-           '南投': ['南投', '竹山'],  # 2
-           '彰化': ['二林', '彰化']},  # 2
-
-    '北部': {'台北': ['中山', '古亭', '士林', '松山', '萬華'],  # 5
-           '新北': ['土城', '新店', '新莊', '板橋', '林口', '汐止', '菜寮', '萬里'],  # 8
-           '基隆': ['基隆'],  # 1
-           '桃園': ['大園', '平鎮', '桃園', '龍潭']}, # 4
-
-    '宜蘭': {'宜蘭': ['冬山', '宜蘭']},  # 2
-
-    '竹苗': {'新竹': ['新竹', '湖口', '竹東'],  # 3
-           '苗栗': ['三義', '苗栗']},  # 2
-
-    '花東': {'花蓮': ['花蓮'],  # 1
-           '台東': ['臺東']},  # 1
-
-    '北部離島': {'彭佳嶼': []},
-
-    '西部離島': {'金門': ['金門'], # 1
-             '連江': ['馬祖'],  # 1
-             '東吉嶼': [],
-             '澎湖': ['馬公']},  # 1
-
-    '雲嘉南': {'雲林': ['崙背', '斗六', '竹山'],  # 3
-            '台南': ['善化', '安南', '新營', '臺南'],  # 4
-            '嘉義': ['嘉義', '新港', '朴子']},  # 3
-
-    '高屏': {'高雄': ['仁武', '前金', '大寮', '小港', '左營', '林園', '楠梓', '美濃'],  # 8
-           '屏東': ['屏東', '恆春', '潮州']}  # 3
-}
+pollution_site_map = site_map()
 
 
 # high_alert = 53.5
 # low_alert = 35.5
 
-local = '北部'
-city = '台北'
-site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-target_site = '萬華'
 
-training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = ['2016', '2016']
+local = os.sys.argv[1]
+city = os.sys.argv[2]
+target_site = os.sys.argv[3]
 
-training_duration = ['1/1', '10/31']
-testing_duration = ['11/15', '12/31']
-interval_hours = 24  # predict the label of average data of many hours later, default is 1
-is_training = True
+training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
 
-# local = os.sys.argv[1]
-# city = os.sys.argv[2]
-# site_list = pollution_site_map[local][city]
-# target_site = os.sys.argv[3]
+training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+
+
+# local = '北部'
+# city = '台北'
+# target_site = '萬華'
 #
-# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = ['2016', '2016']
 #
-# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = ['1/1', '10/31']
+# testing_duration = ['11/15', '12/31']
+# interval_hours = 24  # predict the label of average data of many hours later, default is 1
+# is_training = True
+
+
+# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+# --
+site_list = list()
+for i in pollution_site_map:
+    for j in pollution_site_map[i]:
+        try:
+            site_list += [pollution_site_map[i][j][0]]
+        except:
+            site_list += []
+        # --
 
 target_kind = 'PM2.5'
 
@@ -119,21 +100,27 @@ for i in range(rangeofYear):
 # Training Parameters
 # WIND_DIREC is a specific feature, that need to be processed, and it can only be element of input vector now.
 pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']  # , 'AMB_TEMP', 'RH'
+pollution_group = list()
+pollution_group.append(['O3', 'SO2', 'WIND_SPEED', 'WIND_DIREC'])
+pollution_group.append(['O3', 'CO', 'WIND_SPEED', 'WIND_DIREC'])
+pollution_group.append(['O3', 'NO2', 'WIND_SPEED', 'WIND_DIREC'])
+pollution_group.append(['PM2.5', 'WIND_SPEED', 'WIND_DIREC'])
+
 data_update = False
 p_dense = 0.5
 regularizer = float('1e-6')
-batch_size = 1024
+batch_size = 256
 seed = 0
 
 # Network Parameters
-input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC' in pollution_kind else (len(site_list)*len(pollution_kind))
+# input_size = (len(site_list)*len(pollution_kind)+len(site_list)) if 'WIND_DIREC' in pollution_kind else (len(site_list)*len(pollution_kind))
 
 layer1_time_steps = 24  # 24 hours a day
 layer2_time_steps = 14  # 7 days
 
 hidden_size1 = 8
 hidden_size2 = 16
-hidden_size3 = 4
+# hidden_size3 = 4
 output_size = 1
 
 testing_month = testing_duration[0][:testing_duration[0].index('/')]
@@ -141,6 +128,7 @@ folder = root_path+"model/%s/%s/%sh/" % (local, city, interval_hours)
 training_begining = training_duration[0][:training_duration[0].index('/')]
 training_deadline = training_duration[-1][:training_duration[-1].index('/')]
 print('site: %s' % target_site)
+# print('site list: ', site_list)
 print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], training_year[-1], training_duration[-1]))
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
 print('Target: %s' % target_kind)
@@ -186,148 +174,213 @@ def higher(Y, interval_hours):
     return Y
 
 
-if True:  # is_training:
-    # reading data
-    print('Reading data .. ')
-    start_time = time.time()
-    initial_time = time.time()
-    print('preparing training set ..')
-    X_train = read_data_sets(sites=site_list+[target_site], date_range=np.atleast_1d(training_year),
-                             beginning=training_duration[0], finish=training_duration[-1],
-                             feature_selection=pollution_kind, update=data_update)
-    X_train = missing_check(X_train)
-    Y_train = np.array(X_train)[:, -len(pollution_kind):]
-    Y_train = Y_train[:, pollution_kind.index(target_kind)]
-    X_train = np.array(X_train)[:, :-len(pollution_kind)]
+# if True:  # is_training:
+# reading data
+print('Reading data .. ')
+start_time = time.time()
+initial_time = time.time()
+print('preparing training set ..')
 
-    print('preparing testing set ..')
-    X_test = read_data_sets(sites=site_list + [target_site], date_range=np.atleast_1d(testing_year),
-                            beginning=testing_duration[0], finish=testing_duration[-1],
-                            feature_selection=pollution_kind, update=data_update)
-    Y_test = np.array(X_test)[:, -len(pollution_kind):]
-    Y_test = Y_test[:, pollution_kind.index(target_kind)]
-    X_test = missing_check(np.array(X_test)[:, :-len(pollution_kind)])
+raw_data_train = read_data_sets(sites=site_list+[target_site], date_range=np.atleast_1d(training_year),
+                                beginning=training_duration[0], finish=training_duration[-1],
+                                feature_selection=pollution_kind, update=data_update)
+raw_data_train = missing_check(raw_data_train)
+Y_train = np.array(raw_data_train)[:, -len(pollution_kind):]
+Y_train = Y_train[:, pollution_kind.index(target_kind)]
+raw_data_train = np.array(raw_data_train)[:, :-len(pollution_kind)]
 
-    final_time = time.time()
-    print('Reading data .. ok, ', end='')
-    time_spent_printer(start_time, final_time)
+print('preparing testing set ..')
 
-    # print(len(X_train), 'train sequences')
-    # print(len(X_test), 'test sequences')
+raw_data_test = read_data_sets(sites=site_list + [target_site], date_range=np.atleast_1d(testing_year),
+                               beginning=testing_duration[0], finish=testing_duration[-1],
+                               feature_selection=pollution_kind, update=data_update)
+Y_test = np.array(raw_data_test)[:, -len(pollution_kind):]
+Y_test = Y_test[:, pollution_kind.index(target_kind)]
+raw_data_test = missing_check(np.array(raw_data_test)[:, :-len(pollution_kind)])
+Y_test = np.array(Y_test, dtype=np.float)
 
-    # if (len(X_train) < time_steps) or (len(X_test) < time_steps):
-    #     input('time_steps(%d) too long.' % time_steps)
+final_time = time.time()
+print('Reading data .. ok, ', end='')
+time_spent_printer(start_time, final_time)
 
-    # normalize
-    print('Normalize ..')
-    mean_X_train = np.mean(X_train, axis=0)
-    std_X_train = np.std(X_train, axis=0)
-    if 0 in std_X_train:
-        input("Denominator can't be 0.")
-    X_train = np.array([(x_train-mean_X_train)/std_X_train for x_train in X_train])
-    X_test = np.array([(x_test-mean_X_train)/std_X_train for x_test in X_test])
 
-    mean_y_train = np.mean(Y_train)
-    std_y_train = np.std(Y_train)
-    if not std_y_train:
-        input("Denominator can't be 0.")
-    Y_train = [(y - mean_y_train) / std_y_train for y in Y_train]
-    print('mean_y_train: %f  std_y_train: %f' % (mean_y_train, std_y_train))
+# normalize
+print('Normalize ..')
+# mean_X_train = np.mean(X_train, axis=0)
+# std_X_train = np.std(X_train, axis=0)
+# if 0 in std_X_train:
+#     input("Denominator can't be 0.")
+# X_train = np.array([(x_train-mean_X_train)/std_X_train for x_train in X_train])
+# X_test = np.array([(x_test-mean_X_train)/std_X_train for x_test in X_test])
+#
+mean_y_train = np.mean(Y_train)
+std_y_train = np.std(Y_train)
+if not std_y_train:
+    input("Denominator can't be 0.")
+Y_train = [(y - mean_y_train) / std_y_train for y in Y_train]
+print('mean_y_train: %f  std_y_train: %f' % (mean_y_train, std_y_train))
+#
+# fw = open(folder + "%s_parameter_%s.pickle" % (target_site, target_kind), 'wb')
+# cPickle.dump(str(mean_X_train) + ',' +
+#              str(std_X_train) + ',' +
+#              str(mean_y_train) + ',' +
+#              str(std_y_train), fw)
+# fw.close()
 
-    fw = open(folder + "%s_parameter_%s.pickle" % (target_site, target_kind), 'wb')
-    cPickle.dump(str(mean_X_train) + ',' +
-                 str(std_X_train) + ',' +
-                 str(mean_y_train) + ',' +
-                 str(std_y_train), fw)
-    fw.close()
 
-    # feature process
-    if 'WIND_DIREC' in pollution_kind:
-        index_of_kind = pollution_kind.index('WIND_DIREC')
-        length_of_kind_list = len(pollution_kind)
-        len_of_sites_list = len(site_list)
-        X_train = X_train.tolist()
-        X_test = X_test.tolist()
-        for i in range(len(X_train)):
-            for j in range(len_of_sites_list):
-                specific_index = index_of_kind + j * length_of_kind_list
-                coordin = data_coordinate_angle((X_train[i].pop(specific_index+j))*std_X_train[specific_index]+mean_X_train[specific_index])
-                X_train[i].insert(specific_index + j, coordin[1])
-                X_train[i].insert(specific_index + j, coordin[0])
-                if i < len(X_test):
-                    coordin = data_coordinate_angle((X_test[i].pop(specific_index+j))*std_X_train[specific_index]+mean_X_train[specific_index])
-                    X_test[i].insert(specific_index + j, coordin[1])
-                    X_test[i].insert(specific_index + j, coordin[0])
-        X_train = np.array(X_train)
-        X_test = np.array(X_test)
-    Y_test = np.array(Y_test, dtype=np.float)
+# feature process
+print('feature process ..')
+if 'WIND_DIREC' in pollution_kind:
+    index_of_kind = pollution_kind.index('WIND_DIREC')
+    length_of_kind_list = len(pollution_kind)
+    len_of_sites_list = len(site_list)
+    data_train = raw_data_train.tolist()
+    data_test = raw_data_test.tolist()
+    for i in range(len(data_train)):
+        for j in range(len_of_sites_list):
+            specific_index = index_of_kind + j * length_of_kind_list
+            coordin = data_coordinate_angle(data_train[i].pop(specific_index+j))  # *std_X_train[specific_index]+mean_X_train[specific_index]
+            data_train[i].insert(specific_index + j, coordin[1])
+            data_train[i].insert(specific_index + j, coordin[0])
+            if i < len(data_test):
+                coordin = data_coordinate_angle(data_test[i].pop(specific_index+j))  # *std_X_train[specific_index]+mean_X_train[specific_index]
+                data_test[i].insert(specific_index + j, coordin[1])
+                data_test[i].insert(specific_index + j, coordin[0])
+    data_train = np.array(data_train)
+    data_test = np.array(data_test)
+else:
+    data_train = raw_data_train
+    data_test = raw_data_test
 
-    # --
+# --
+del raw_data_train
+del raw_data_test
 
-    print('Constructing time series data set ..')
+# -- grouping the pollution with high correlation --
+# pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'WIND_SPEED', 'WIND_DIREC']  # WIND_DIREC has two dimension
+# pollution_group = list()
+# append(['O3', 'SO2', 'WIND_SPEED', 'WIND_DIREC'])
+# append(['O3', 'CO', 'WIND_SPEED', 'WIND_DIREC'])
+# append(['O3', 'NO2', 'WIND_SPEED', 'WIND_DIREC'])
+# append(['PM2.5', 'WIND_SPEED', 'WIND_DIREC'])
+X_train = list()
+for i in range(len(pollution_group)):
+    x_train = list()
+    for k in range(len(site_list)):
+        for j in range(len(pollution_group[i])):
+            index = pollution_kind.index(pollution_group[i][j]) + k * (len(pollution_kind)+1)
+            x_train.append(data_train[:, index])
+            if pollution_group[i][j] == 'WIND_DIREC':
+                x_train.append(data_train[:, index+1])
+    X_train.append(np.array(x_train).T)
+
+X_test = list()
+for i in range(len(pollution_group)):
+    x_test = list()
+    for k in range(len(site_list)):
+        for j in range(len(pollution_group[i])):
+            index = pollution_kind.index(pollution_group[i][j]) + k * (len(pollution_kind)+1)
+            x_test.append(data_test[:, index])
+            if pollution_group[i][j] == 'WIND_DIREC':
+                x_test.append(data_test[:, index+1])
+    X_test.append(np.array(x_test).T)
+
+# --
+
+del data_train
+del data_test
+
+# --
+
+print('Constructing time series data set ..')
+start_time = time.time()
+for i in range(len(pollution_group)):
     # for layer 1
-    X_train = construct_time_steps(X_train[:-1], layer1_time_steps)
-    X_test = construct_time_steps(X_test[:-1], layer1_time_steps)
-
-    Y_train = Y_train[layer1_time_steps:]
-    Y_test = Y_test[layer1_time_steps:]
+    X_train[i] = construct_time_steps(X_train[i][:-1], layer1_time_steps)
+    X_test[i] = construct_time_steps(X_test[i][:-1], layer1_time_steps)
 
     # for layer 2
-    X_train = construct_second_time_steps(X_train, layer1_time_steps, layer2_time_steps)
-    X_test = construct_second_time_steps(X_test, layer1_time_steps, layer2_time_steps)
+    X_train[i] = construct_second_time_steps(X_train[i], layer1_time_steps, layer2_time_steps)
+    X_test[i] = construct_second_time_steps(X_test[i], layer1_time_steps, layer2_time_steps)
+final_time = time.time()
+time_spent_printer(start_time, final_time)
 
-    Y_train = Y_train[layer1_time_steps*(layer2_time_steps-1):]
-    Y_test = Y_test[layer1_time_steps*(layer2_time_steps-1):]
 
-    # --
+# for layer 1
+Y_train = Y_train[layer1_time_steps:]
+Y_test = Y_test[layer1_time_steps:]
+# for layer 2
+Y_train = Y_train[layer1_time_steps*(layer2_time_steps-1):]
+Y_test = Y_test[layer1_time_steps*(layer2_time_steps-1):]
 
-    Y_real = np.copy(Y_test)
+# --
 
-    # Y_train = higher(Y_train, interval_hours)
-    # Y_test = higher(Y_test, interval_hours)
-    Y_train = Y_train[interval_hours-1:]
-    Y_test = Y_test[interval_hours-1:]
-    Y_real = Y_real[interval_hours - 1:]
+Y_real = np.copy(Y_test)
 
-    train_seq_len = np.min([len(Y_train), len(X_train)])
-    test_seq_len = np.min([len(Y_test), len(X_test)])
+# Y_train = higher(Y_train, interval_hours)
+# Y_test = higher(Y_test, interval_hours)
+Y_train = Y_train[interval_hours-1:]
+Y_test = Y_test[interval_hours-1:]
+Y_real = Y_real[interval_hours - 1:]
 
-    print(len(X_train), 'train sequences')
-    print(len(X_test), 'test sequences')
+# --
+# min_length_X_train = raw_data_train
+# min_length_X_test = raw_data_test
 
-    X_train = X_train[:train_seq_len]
-    X_test = X_test[:test_seq_len]
+for i in range(len(pollution_group)):
+    try:
+        if len(X_train[i]) < min_length_X_train:
+            min_length_X_train = len(X_train[i])
+    except:
+        min_length_X_train = len(X_train[i])
 
-    Y_train = Y_train[:train_seq_len]
-    Y_test = Y_test[:test_seq_len]
-    Y_real = Y_real[:test_seq_len]
+    try:
+        if len(X_test[i]) < min_length_X_test:
+            min_length_X_test = len(X_test[i])
+    except:
+        min_length_X_test = len(X_test[i])
 
-    # delete data which have missing values
-    i = 0
-    while i < len(Y_test):
-        if not(Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
-            Y_test = np.delete(Y_test, i, 0)
-            Y_real = np.delete(Y_real, i, 0)
-            X_test = np.delete(X_test, i, 0)
-            i = -1
-        i += 1
-    Y_test = np.array(Y_test, dtype=np.float)
-    Y_real = np.array(Y_real, dtype=np.float)
+train_seq_len = np.min([len(Y_train), min_length_X_train])
+test_seq_len = np.min([len(Y_test), min_length_X_test])
 
-    print('delete invalid testing data, remain ', len(X_test), 'test sequences')
+print('%d train sequences' % train_seq_len)
+print('%d test sequences' % test_seq_len)
 
-    # --
+X_train = X_train[:train_seq_len]
+X_test = X_test[:test_seq_len]
 
-    X_train = np.array(X_train)
-    X_test = np.array(X_test)
-    Y_train = np.array(Y_train)
+Y_train = Y_train[:train_seq_len]
+Y_test = Y_test[:test_seq_len]
+Y_real = Y_real[:test_seq_len]
 
-    np.random.seed(seed)
-    np.random.shuffle(Y_train)
+# delete data which have missing values
+i = 0
+while i < len(Y_test):
+    if not(Y_test[i] > -10000):  # check missing or not, if Y_test[i] is missing, then this command will return True
+        Y_test = np.delete(Y_test, i, 0)
+        Y_real = np.delete(Y_real, i, 0)
+        for i in range(len(pollution_group)):
+            X_test[i] = np.delete(X_test[i], i, 0)
+        i = -1
+    i += 1
+Y_test = np.array(Y_test, dtype=np.float)
+Y_real = np.array(Y_real, dtype=np.float)
 
-    np.random.seed(seed)
-    np.random.shuffle(X_train)
+print('delete invalid testing data, remain ', len(Y_test), 'test sequences')
 
+# --
+
+for i in range(len(pollution_group)):
+    X_train[i] = np.array(X_train[i])
+    X_test[i] = np.array(X_test[i])
+Y_train = np.array(Y_train)
+
+# np.random.seed(seed)
+# np.random.shuffle(Y_train)
+#
+# np.random.seed(seed)
+# np.random.shuffle(X_train)
+"""
 else:  # is_training = false
     # mean and std
     fr = open(folder + "%s_parameter_%s.pickle" % (target_site, target_kind), 'rb')
@@ -419,12 +472,12 @@ else:  # is_training = false
     # --
 
     X_test = np.array(X_test)
-
+"""
 
 # -- rnn --
 print('- rnn -')
 
-filename = ("sa_DropoutLSTM_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
+filename = ("rnn_%s_training_%s_m%s_to_%s_m%s_interval_%s_%s"
             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours, target_kind))
 print(filename)
 
@@ -435,54 +488,55 @@ print('Build rnn model...')
 start_time = time.time()
 
 # input layer
-input_shape = (layer1_time_steps, input_size)
-rnn_model_input = list()
-for i in range(layer2_time_steps):
-    rnn_model_input.append(Input(shape=input_shape, dtype='float32'))
+model_input = list()
+for i in range(len(pollution_group)):
+    input_size = len(pollution_group[i])+1 if 'WIND_DIREC' in pollution_group[i] else len(pollution_group[i])  # feature 'WIND_DIREC' has two dimension
+    input_size = input_size * len(site_list)
+
+    input_shape = (layer1_time_steps, input_size)
+
+    for j in range(layer2_time_steps):
+        model_input.append(Input(shape=input_shape, dtype='float32'))
 
 # layer 1
-rnn_model_layer1 = list()
+rnn_model_layer2 = list()
+for j in range(len(pollution_group)):
+    rnn_model_layer1 = list()
+    for i in range(layer2_time_steps):
+        rnn_model_layer1.append(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
+                                                   gamma_initializer="one", weights=None, gamma_regularizer=None,
+                                                   momentum=0.99, axis=-1)(model_input[j*layer2_time_steps+i]))
+        # return_sequences=True
+        # recurrent_activation='relu', kernel_constraint=maxnorm(2.), recurrent_constraint=maxnorm(2.),
+        # bias_constraint=maxnorm(2.)
+        rnn_model_layer1[i] = LSTM(hidden_size1, kernel_regularizer=l2(regularizer),
+                                   recurrent_regularizer=l2(regularizer), bias_regularizer=l2(regularizer),
+                                   recurrent_dropout=0.5)(rnn_model_layer1[i])
+        rnn_model_layer1[i] = Dropout(p_dense)(rnn_model_layer1[i])
 
-for i in range(layer2_time_steps):
-    rnn_model_layer1.append(BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
-                                               gamma_initializer="one", weights=None, gamma_regularizer=None,
-                                               momentum=0.99, axis=-1)(rnn_model_input[i]))
-    # return_sequences=True
-    # recurrent_activation='relu', kernel_constraint=maxnorm(2.), recurrent_constraint=maxnorm(2.),
-    # bias_constraint=maxnorm(2.)
-    rnn_model_layer1[i] = LSTM(hidden_size1, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                               bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(rnn_model_layer1[i])
-    rnn_model_layer1[i] = Dropout(p_dense)(rnn_model_layer1[i])
+    # layer 2
+    rnn_model_layer2.append(concatenate(rnn_model_layer1))
 
-# layer 2
-rnn_model_layer2 = concatenate(rnn_model_layer1)
+    rnn_model_layer2[j] = Reshape((layer2_time_steps, hidden_size1))(rnn_model_layer2[j])
 
-rnn_model_layer2 = Reshape((layer2_time_steps, hidden_size1))(rnn_model_layer2)
+    rnn_model_layer2[j] = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
+                                             gamma_initializer="one", weights=None, gamma_regularizer=None,
+                                             momentum=0.99, axis=-1)(rnn_model_layer2[j])
+    rnn_model_layer2[j] = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
+                               bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(
+        rnn_model_layer2[j])
 
-rnn_model_layer2 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
-                                      weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(rnn_model_layer2)
-rnn_model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5, return_sequences=True)(rnn_model_layer2)
+    rnn_model_layer2[j] = Dropout(p_dense)(rnn_model_layer2[j])
 
-rnn_model_layer2 = Dropout(p_dense)(rnn_model_layer2)
-
-# third layer
-rnn_model_layer3 = rnn_model_layer2
-
-rnn_model_layer3 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
-                                      weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(rnn_model_layer3)
-rnn_model_layer3 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                        bias_regularizer=l2(regularizer), recurrent_dropout=0.5)(rnn_model_layer3)
-rnn_model_layer3 = Dropout(p_dense)(rnn_model_layer3)
 
 # output layer
-output_layer = rnn_model_layer3
+output_layer = concatenate(rnn_model_layer2)
 
 output_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
                                   weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(output_layer)
 output_layer = Dense(output_size, kernel_regularizer=l2(regularizer), bias_regularizer=l2(regularizer))(output_layer)
 
-rnn_model = Model(inputs=rnn_model_input, outputs=output_layer)
+rnn_model = Model(inputs=model_input, outputs=output_layer)
 rnn_model.compile(loss=keras.losses.mean_squared_error,
                   optimizer='adam',
                   metrics=['accuracy'])
@@ -498,11 +552,21 @@ time_spent_printer(start_time, final_time)
 if is_training:
     print("Train...")
     start_time = time.time()
-    rnn_model.fit([X_train[:, i, :, :] for i in range(layer2_time_steps)], Y_train,
+    X_train_input = list()
+    X_test_input = list()
+    # -- for debug
+    # print(type(X_train))
+    # print(len(X_train))
+    # print(type(X_train[0][0]))
+    # print(len(X_train[0][0]))
+    # --
+    for i in range(len(pollution_group)):
+        X_train_input += ([X_train[i][:, j, :, :] for j in range(layer2_time_steps)])
+        X_test_input += ([X_test[i][:, j, :, :] for j in range(layer2_time_steps)])
+    rnn_model.fit(X_train_input, Y_train,
                   batch_size=batch_size,
                   epochs=50,
-                  validation_data=([X_test[:, i, :, :] for i in range(layer2_time_steps)],
-                                   ((Y_test - mean_y_train) / std_y_train)))
+                  validation_data=(X_test_input, ((Y_test - mean_y_train) / std_y_train)))  # ((Y_test - mean_y_train) / std_y_train)
 
     # Potentially save weights
     # rnn_model.save_weights(folder + filename, overwrite=True)
@@ -518,12 +582,19 @@ else:
     # rnn_model.load_weights(folder + filename)
     rnn_model = keras.models.load_model(folder + filename)
 
-rnn_pred = rnn_model.predict([X_test[:, i, :, :] for i in range(layer2_time_steps)])
+
+X_test_input = list()
+for i in range(len(pollution_group)):
+    X_test_input += ([X_test[i][:, j, :, :] for j in range(layer2_time_steps)])
+
+rnn_pred = rnn_model.predict(X_test_input)
 final_time = time.time()
 time_spent_printer(start_time, final_time)
-print('rmse(rnn): %.5f' % (np.mean((np.atleast_2d(Y_test).T - (mean_y_train + std_y_train * rnn_pred))**2, 0)**0.5))
 
 pred = mean_y_train + std_y_train * rnn_pred
+# pred = rnn_pred
+
+print('rmse(rnn): %.5f' % (np.mean((np.atleast_2d(Y_test).T - pred)**2, 0)**0.5))
 
 plt.plot(np.arange(len(pred)), Y_real[:len(pred)], c='gray')
 plt.plot(np.arange(len(pred)), Y_test[:len(pred)], c='mediumaquamarine')
@@ -537,9 +608,14 @@ plt.show()
 
 # -- check overfitting --
 
-train_pred = rnn_model.predict([X_train[:, i, :, :][-800:] for i in range(layer2_time_steps)])
-train_pred = mean_y_train + std_y_train * train_pred
-train_pred_target = mean_y_train + std_y_train * Y_train[-800:]
+X_train_input = list()
+for i in range(len(pollution_group)):
+    X_train_input += ([X_train[i][:, j, :, :][-800:] for j in range(layer2_time_steps)])
+
+train_pred = rnn_model.predict(X_train_input)
+train_pred_target = Y_train[-800:]
+# train_pred = mean_y_train + std_y_train * train_pred
+# train_pred_target = mean_y_train + std_y_train * train_pred_target
 plt.plot(np.arange(len(train_pred)), train_pred_target, color='mediumaquamarine')
 plt.plot(np.arange(len(train_pred)), train_pred, c='pink')
 plt.xticks(np.arange(0, len(train_pred), 24))

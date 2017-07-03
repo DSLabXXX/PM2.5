@@ -615,7 +615,7 @@ output_layer = Dense(output_layer2_size, kernel_regularizer=l2(regularizer), bia
 # --
 model_input = rnn_model_input
 model_input.append(model_input_freq)
-rnn_model = Model(inputs=rnn_model_input, outputs=output_layer)
+rnn_model = Model(inputs=model_input, outputs=output_layer)
 rnn_model.compile(loss=keras.losses.mean_squared_error,
                   optimizer='adam',
                   metrics=['accuracy'])
