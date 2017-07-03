@@ -51,7 +51,7 @@ def time_to_angle(time):  # year/month/date
     return year, month, date, angle
 
 
-def weekday(y, m, d):  # year/month/date
+def return_weekday(y, m, d):  # year/month/date
     return datetime.datetime.weekday(datetime.date(y, m, d))
 
 
