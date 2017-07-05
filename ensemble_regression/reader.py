@@ -1,6 +1,7 @@
 # _*_ coding: utf-8 _*_
 
 from data_reader import data_reader
+from feature_processor import time_to_angle, return_weekday, data_coordinate_angle
 from config import root
 
 root_path = root()
@@ -189,7 +190,13 @@ def read_data_sets(sites=['中山', '古亭', '士林', '松山', '萬華'], dat
                     print('Data of pollution missing: %s/%s' % (each_year, each_date))
                 else:
                     for each_hour in range(24):
-                        feature_vector = []
+                        feature_vector = list()
+                        feature_vector += data_coordinate_angle(
+                            time_to_angle('%s/%s' % (each_year, each_date))[-1])  # day of year
+                        feature_vector += data_coordinate_angle(
+                            return_weekday(int(each_year), int(month), int(day+1)))  # day of week
+                        feature_vector += data_coordinate_angle(
+                            float(each_hour)/24*360)  # time of day
                         for site in sites:
                             if not (site in y_d_h_data[each_year][each_date]['pollution']):
                                 # print('Data of site(%s) missing: %s/%s %d:00' % (site, each_year, each_date, each_hour))
