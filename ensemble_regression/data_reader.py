@@ -135,8 +135,9 @@ def data_reader(start_year, last_year, path=root_path+'dataset/', update=False):
             fr = open(path+'cPickle/pollution_and_weather_data_'+str(start_year), 'rb')
             y_d_h_data[str(start_year)] = cPickle.load(fr)
             fr.close()
-
             start_year += 1
+        else:
+            break
 
     if not_exit_flag > 0:
         return y_d_h_data
