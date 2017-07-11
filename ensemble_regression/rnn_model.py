@@ -71,7 +71,7 @@ local = '北部'
 city = '台北'
 target_site = '萬華'
 
-training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+training_year = ['2009', '2016']  # change format from   2014-2015   to   ['2014', '2015']
 testing_year = ['2016', '2016']
 
 training_duration = ['1/1', '10/31']
@@ -114,7 +114,8 @@ for i in range(rangeofYear):
 
 # Training Parameters
 # WIND_DIREC is a specific feature, that need to be processed, and it can only be element of input vector now.
-pollution_kind = ['PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC']  # , 'AMB_TEMP', 'RH'
+pollution_kind = ['PM2.5', 'O3', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC']
+# 'PM2.5', 'O3', 'SO2', 'CO', 'NO2', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC'
 # pollution_group = list()
 # pollution_group.append(['O3', 'SO2', 'WIND_SPEED', 'WIND_DIREC'])
 # pollution_group.append(['O3', 'CO', 'WIND_SPEED', 'WIND_DIREC'])
@@ -354,7 +355,7 @@ Y_real = np.copy(Y_test)
 # Y_test = higher(Y_test, interval_hours)
 Y_train = Y_train[interval_hours-1:]
 Y_test = Y_test[interval_hours-1:]
-Y_real = Y_real[interval_hours - 1:]
+Y_real = Y_real[:len(Y_test)]
 
 # --
 min_length_X_train = len(X_train)
@@ -389,7 +390,6 @@ Y_real = Y_real[:test_seq_len]
 
 
 # -- fourier transfer --
-
 
 def time_domain_to_frequency_domain(time_tensor):
     freq_output = list()
@@ -431,6 +431,44 @@ time_spent_printer(start_time, final_time)
 
 # --
 
+
+# -- highest & lowest & average
+
+def h_l_ave(tensor_4d):
+    new_features_tensor = list()
+    for f_i in range(len(tensor_4d)):
+        new_features_matrix = list()
+
+        length_of_kind_list = len(pollution_kind)
+        index_of_site = site_list.index(target_site)
+        length_of_kind_list = length_of_kind_list + 1 if 'WIND_DIREC' in pollution_kind else length_of_kind_list
+        index_of_kind = pollution_kind.index(target_kind)
+        index = feature_kind_shift + index_of_kind + index_of_site * length_of_kind_list
+
+        for f_k in range(len(tensor_4d[f_i])):
+            feature_vector = tensor_4d[f_i, f_k, :, index]
+
+            new_features_vector = list()
+
+            new_features_vector.append(np.max(feature_vector))
+            new_features_vector.append(np.min(feature_vector))
+            new_features_vector.append(np.average(feature_vector))
+
+            new_features_matrix.append(new_features_vector)
+
+        new_features_tensor.append(new_features_matrix)
+
+    return new_features_tensor
+
+
+h_l_ave_X_train = np.array(X_train)
+h_l_ave_X_test = np.array(X_test)
+
+h_l_ave_X_train = h_l_ave(h_l_ave_X_train)
+h_l_ave_X_test = h_l_ave(h_l_ave_X_test)
+
+# --
+
 # delete data which have missing values
 i = 0
 while i < len(Y_test):
@@ -440,6 +478,7 @@ while i < len(Y_test):
         # for i in range(len(pollution_group)):
         X_test = np.delete(X_test, i, 0)
         freq_X_test = np.delete(freq_X_test, i, 0)
+        h_l_ave_X_test = np.delete(h_l_ave_X_test, i, 0)
         i = -1
     i += 1
 Y_test = np.array(Y_test, dtype=np.float)
@@ -457,14 +496,20 @@ Y_train = np.array(Y_train)
 freq_X_train = np.array(freq_X_train)
 freq_X_test = np.array(freq_X_test)
 
+h_l_ave_X_train = np.array(h_l_ave_X_train)
+h_l_ave_X_test = np.array(h_l_ave_X_test)
+
+
 # validation set
-X_validation = X_train[-800:]
-freq_X_validation = freq_X_train[-800:]
-Y_validation = Y_train[-800:]
+X_valid = X_train[-800:]
+freq_X_valid = freq_X_train[-800:]
+Y_valid = Y_train[-800:]
+h_l_ave_X_valid = h_l_ave_X_train[-800:]
 
 X_train = X_train[:-800]
 freq_X_train = freq_X_train[:-800]
 Y_train = Y_train[:-800]
+h_l_ave_X_train = h_l_ave_X_train[:-800]
 
 print('take 800 data to validation set')
 
@@ -581,7 +626,7 @@ print('Build rnn model...')
 start_time = time.time()
 
 # input layer
-# rnn
+# rnn 1
 model_input = list()
 # for i in range(len(pollution_group)):
 input_size = len(pollution_kind)+1 if 'WIND_DIREC' in pollution_kind else len(pollution_kind)  # feature 'WIND_DIREC' has two dimension
@@ -592,20 +637,28 @@ input_shape = (layer1_time_steps, input_size)
 for j in range(layer2_time_steps):
     model_input.append(Input(shape=input_shape, dtype='float32'))
 
-# cnn
+
+# rnn 2
 # model_input2 = list()
+input_size = 3  # high, low, average
+input_shape = (layer2_time_steps, input_size)
+model_input.append(Input(shape=input_shape, dtype='float32'))
+
+
+# cnn
+# model_input3 = list()
 freq_high = layer2_time_steps
 freq_width = layer1_time_steps
 num_of_kind = len(pollution_kind)-1 if 'WIND_DIREC' in pollution_kind else len(pollution_kind)
 
 if K.image_data_format() == 'channels_first':
     freq_X_train = freq_X_train.reshape(freq_X_train.shape[0], num_of_kind, 1, freq_high, freq_width)
-    freq_X_validation = freq_X_validation.reshape(freq_X_validation.shape[0], num_of_kind, 1, freq_high, freq_width)
+    freq_X_valid = freq_X_valid.reshape(freq_X_valid.shape[0], num_of_kind, 1, freq_high, freq_width)
     freq_X_test = freq_X_test.reshape(freq_X_test.shape[0], num_of_kind, 1, freq_high, freq_width)
     freq_input_shape = (1, freq_high, freq_width)
 else:
     freq_X_train = freq_X_train.reshape(freq_X_train.shape[0], num_of_kind, freq_high, freq_width, 1)
-    freq_X_validation = freq_X_validation.reshape(freq_X_validation.shape[0], num_of_kind, freq_high, freq_width, 1)
+    freq_X_valid = freq_X_valid.reshape(freq_X_valid.shape[0], num_of_kind, freq_high, freq_width, 1)
     freq_X_test = freq_X_test.reshape(freq_X_test.shape[0], num_of_kind, freq_high, freq_width, 1)
     freq_input_shape = (freq_high, freq_width, 1)
 
@@ -614,6 +667,7 @@ for i in range(num_of_kind):
 
 
 # layer 1
+# rnn 1
 # rnn_model_layer2 = list()
 # for j in range(len(pollution_group)):
 rnn_model_layer1 = list()
@@ -644,12 +698,22 @@ rnn_model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurr
 rnn_model_layer2 = Dropout(dropout)(rnn_model_layer2)
 
 
+# rnn 2
+h_l_ave_rnn_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
+                                       gamma_initializer="one", weights=None, gamma_regularizer=None,
+                                       momentum=0.99, axis=-1)(model_input[layer2_time_steps])
+h_l_ave_rnn_layer = LSTM(hidden_size1, kernel_regularizer=l2(regularizer),
+                         recurrent_regularizer=l2(regularizer), bias_regularizer=l2(regularizer),
+                         recurrent_dropout=recurrent_dropout)(h_l_ave_rnn_layer)
+h_l_ave_rnn_layer = Dropout(dropout)(h_l_ave_rnn_layer)
+
 # cnn
 cnn_model_layer = list()
 for i in range(num_of_kind):
     cnn_kernel_layer = list()
     for k in [freq_high/4, freq_high/2]:
-        kernel_first_layer = Conv2D(kernel_num_1, kernel_size=(k, freq_width), activation='relu')(model_input[layer2_time_steps+i])
+        kernel_first_layer = Conv2D(kernel_num_1, kernel_size=(k, freq_width), activation='relu')(
+            model_input[layer2_time_steps + 1 + i])
         # kernel_second_layer = Conv2D(kernel_num_2, kernel_size=(k, 1), activation='relu')(kernel_first_layer)
         cnn_kernel_layer.append(Flatten()(kernel_first_layer))
 
@@ -662,14 +726,14 @@ for i in range(num_of_kind):
     cnn_model_layer[i] = Dense(cnn_hidden_size1, activation='relu')(cnn_model_layer[i])
     cnn_model_layer[i] = Dropout(dropout)(cnn_model_layer[i])
 
-cnn_model_layer = concatenate(cnn_model_layer)
+if len(cnn_model_layer) > 1:
+    cnn_model_layer = concatenate(cnn_model_layer)
+else:
+    cnn_model_layer = cnn_model_layer[0]
+
 
 # output layer
-# if len(rnn_model_layer2) > 1:
-#     output_layer = concatenate(rnn_model_layer2)
-# else:
-output_layer = concatenate([rnn_model_layer2, cnn_model_layer])
-
+output_layer = concatenate([rnn_model_layer2, cnn_model_layer, h_l_ave_rnn_layer])
 
 output_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
                                   weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(output_layer)
@@ -681,9 +745,6 @@ rnn_model.compile(loss=keras.losses.mean_squared_error,
                   optimizer='adam',
                   metrics=['accuracy'])
 
-# optimiser = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=False)
-# optimiser = 'adam'
-# rnn_model.compile(loss='mean_squared_error', optimizer=optimiser)
 
 final_time = time.time()
 time_spent_printer(start_time, final_time)
@@ -692,25 +753,25 @@ time_spent_printer(start_time, final_time)
 if is_training:
     print("Train...")
     start_time = time.time()
-    # X_train_input = list()
-    # X_test_input = list()
 
     # for i in range(len(pollution_group)):
     #     X_train_input += ([X_train[i][:, j, :, :] for j in range(layer2_time_steps)])
     #     X_test_input += ([X_test[i][:, j, :, :] for j in range(layer2_time_steps)])
     X_train_input = [X_train[:, j, :, :] for j in range(layer2_time_steps)] + \
+                    [h_l_ave_X_train] + \
                     [freq_X_train[:, j, :, :] for j in range(num_of_kind)]
-    X_validation_input = [X_validation[:, j, :, :] for j in range(layer2_time_steps)] + \
-                         [freq_X_validation[:, j, :, :] for j in range(num_of_kind)]
+    X_valid_input = [X_valid[:, j, :, :] for j in range(layer2_time_steps)] + \
+                         [h_l_ave_X_valid] + \
+                         [freq_X_valid[:, j, :, :] for j in range(num_of_kind)]
 
     rnn_model.fit(X_train_input, Y_train,
                   batch_size=batch_size,
                   epochs=epoch,
-                  validation_data=(X_validation_input, Y_validation),
+                  validation_data=(X_valid_input, Y_valid),
                   # validation_split=0.05, validation_data=None,
                   shuffle=True,
                   callbacks=[
-                      EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=0, mode='auto'),
+                      EarlyStopping(monitor='val_loss', min_delta=0, patience=3, verbose=0, mode='auto'),
                       ModelCheckpoint(folder + filename, monitor='val_loss', verbose=0, save_best_only=False,
                                       save_weights_only=True, mode='auto', period=1)])
 
@@ -738,6 +799,7 @@ else:
 # for i in range(len(pollution_group)):
 #     X_test_input += ([X_test[i][:, j, :, :] for j in range(layer2_time_steps)])
 X_test_input = [X_test[:, j, :, :] for j in range(layer2_time_steps)] + \
+               [h_l_ave_X_test] + \
                [freq_X_test[:, j, :, :] for j in range(num_of_kind)]
 
 
@@ -748,6 +810,7 @@ time_spent_printer(start_time, final_time)
 pred = mean_y_train + std_y_train * rnn_pred
 # pred = rnn_pred
 
+# print('mse(rnn): %.5f' % (np.mean(((Y_test-mean_y_train)/std_y_train - rnn_pred)**2, 0)))
 print('rmse(rnn): %.5f' % (np.mean((np.atleast_2d(Y_test).T - pred)**2, 0)**0.5))
 
 # --
@@ -773,20 +836,16 @@ plotting([Y_test, pred], filename + '.png', save=True, show=True)
 
 # -- frequency --
 
-Y_freq = np.real(fft(Y_real))
-# with open(root_path + 'result/freq', 'w') as f:
-#     # print(Y_freq)
-#     for i in Y_freq:
-#         f.write(str(i))
-#         f.write(',')
-plotting([Y_freq], 'freq.png', grid=[100, 1000], save=True, show=True)
+# Y_freq = np.real(fft(Y_real))
+# plotting([Y_freq], 'freq.png', grid=[100, 1000], save=True, show=True)
 
 # -- validation
-X_validation_input = [X_validation[:, j, :, :] for j in range(layer2_time_steps)] + \
-                     [freq_X_validation[:, j, :, :] for j in range(num_of_kind)]
+X_valid_input = [X_valid[:, j, :, :] for j in range(layer2_time_steps)] + \
+                     [h_l_ave_X_valid] + \
+                     [freq_X_valid[:, j, :, :] for j in range(num_of_kind)]
 
-valid_pred = rnn_model.predict(X_validation_input)
-plotting([Y_validation, valid_pred], 'valid.png', save=True, show=True)
+valid_pred = rnn_model.predict(X_valid_input)
+plotting([Y_valid, valid_pred], 'valid.png', save=True, show=True)
 
 # -- check overfitting --
 
@@ -794,6 +853,7 @@ plotting([Y_validation, valid_pred], 'valid.png', save=True, show=True)
 # for i in range(len(pollution_group)):
 #     X_train_input += ([X_train[i][:, j, :, :][-800:] for j in range(layer2_time_steps)])
 X_train_input = [X_train[:, j, :, :][-800:] for j in range(layer2_time_steps)] + \
+                [h_l_ave_X_train] + \
                 [freq_X_train[:, j, :, :][-800:] for j in range(num_of_kind)]
 
 train_pred = rnn_model.predict(X_train_input)
