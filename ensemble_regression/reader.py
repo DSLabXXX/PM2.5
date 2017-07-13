@@ -207,8 +207,14 @@ def read_data_sets(sites=['中山', '古亭', '士林', '松山', '萬華'], dat
                             else:
                                 for feature_elem in feature_selection:
                                     try:
-                                        feature_vector.append(float(y_d_h_data[each_year][each_date]['pollution'][site][each_hour][pollution_to_pollution_no(feature_elem)]))
-                                        total_number += 1
+                                        feature = float(y_d_h_data[each_year][each_date]['pollution'][site][each_hour][pollution_to_pollution_no(feature_elem)])
+                                        if feature < 0:
+                                            feature_vector.append('NaN')
+                                            num_of_missing += 1
+                                            total_number += 1
+                                        else:
+                                            feature_vector.append(feature)
+                                            total_number += 1
                                     except:
                                         # print('Data of feature(%s) of site(%s) missing: %s/%s %d:00' % (
                                         #     feature_elem, site, each_year, each_date, each_hour))
