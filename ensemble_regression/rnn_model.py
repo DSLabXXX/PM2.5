@@ -84,6 +84,7 @@ degree = 2
 plot_grid = [interval_hours, 10]
 
 site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+# site_list = ['中山', '古亭', '松山', '萬華', '新店', '土城', '新莊', '板橋']
 # --
 # site_list = list()
 # for i in pollution_site_map:
@@ -938,7 +939,6 @@ train_pred_target = Y_train[-800:]
 
 # train_pred = mean_y_train + std_y_train * train_pred
 # train_pred_target = mean_y_train + std_y_train * train_pred_target
-train_pred = [np.argmax(train_pred[i])+1 for i in range(len(train_pred))]
 
 plotting([train_pred_target, train_pred], 'train.png', grid=plot_grid, save=True, show=True)
 
