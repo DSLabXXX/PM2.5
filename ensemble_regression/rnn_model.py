@@ -71,27 +71,30 @@ local = '北部'
 city = '台北'
 target_site = '萬華'
 
-training_year = ['2009', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = ['2016', '2016']
+training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = ['2017', '2017']
 
-training_duration = ['1/1', '10/31']
-testing_duration = ['11/15', '12/31']
-interval_hours = 24  # predict the label of average data of many hours later, default is 1
-is_training = True
+training_duration = ['1/1', '12/31']
+testing_duration = ['1/1', '1/31']
+interval_hours = 12  # predict the label of average data of many hours later, default is 1
+is_training = True  # True False
 
+degree = 2
 
-# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+plot_grid = [interval_hours, 10]
+
+site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
 # --
-site_list = list()
-for i in pollution_site_map:
-    for j in pollution_site_map[i]:
-        try:
-            site_list += [pollution_site_map[i][j][0]]
-        except:
-            site_list += []
+# site_list = list()
+# for i in pollution_site_map:
+#     for j in pollution_site_map[i]:
+#         try:
+#             site_list += [pollution_site_map[i][j][0]]
+#         except:
+#             site_list += []
 
-if target_site not in site_list:
-    site_list.append(target_site)
+# if target_site not in site_list:
+#     site_list.append(target_site)
 # --
 
 target_kind = 'PM2.5'
@@ -135,18 +138,18 @@ seed = 0
 recurrent_dropout = 0.5
 
 # Network Parameters
-layer1_time_steps = 24  # 24 hours a day
-layer2_time_steps = 14  # 7 days
+layer1_time_steps = 24  # 24 hours, exactly a day
+layer2_time_steps = 14  # how many days
 
 # rnn
-hidden_size1 = 8
-hidden_size2 = 16
-# hidden_size3 = 4
+hidden_size1 = 16
+hidden_size2 = 64
+hidden_size3 = 32
 
 # cnn
 kernel_num_1 = 8
-kernel_num_2 = 4
-cnn_hidden_size1 = 8
+kernel_num_2 = 32
+cnn_hidden_size1 = 16
 
 output_size = 1
 
@@ -199,6 +202,49 @@ def higher(Y, interval_hours):
         if deadline:
             Y = Y[:deadline]
     return Y
+
+
+def smooth(Y, degree=2):  # average with last and future hours
+    New_Y = np.array(Y, dtype=float)
+    for i in range(len(Y)):
+        ave = 0.
+        denominator = degree * 2 + 1
+        for j in range(degree+1):
+            if j == 0:
+                ave += Y[i]
+            else:
+                if (i+j) < len(Y):
+                    ave += Y[i + j]
+                else:
+                    denominator -= 1
+
+                if (i-j) >= 0:
+                    ave += Y[i - j]
+                else:
+                    denominator -= 1
+        ave = ave/denominator
+        New_Y[i] = ave
+    return New_Y
+
+
+def highest(Y, degree=2):  # highest of last and future hours
+    New_Y = np.array(Y, dtype=float)
+    for i in range(len(Y)):
+        highest = 0.
+        # denominator = degree * 2 + 1
+        for j in range(degree+1):
+            if j == 0:
+                highest = Y[i]
+            else:
+                if (i+j) < len(Y):
+                    if highest < Y[i + j]:
+                        highest = Y[i + j]
+
+                if (i-j) >= 0:
+                    if highest < Y[i - j]:
+                        highest = Y[i - j]
+        New_Y[i] = highest
+    return New_Y
 
 
 # if True:  # is_training:
@@ -353,8 +399,17 @@ Y_real = np.copy(Y_test)
 
 # Y_train = higher(Y_train, interval_hours)
 # Y_test = higher(Y_test, interval_hours)
+
+# Y_train = smooth(Y_train, degree=degree)
+# Y_test = smooth(Y_test, degree=degree)
+
+Y_train = highest(Y_train, degree=degree)
+Y_test = highest(Y_test, degree=degree)
+
+
 Y_train = Y_train[interval_hours-1:]
 Y_test = Y_test[interval_hours-1:]
+
 Y_real = Y_real[:len(Y_test)]
 
 # --
@@ -391,10 +446,10 @@ Y_real = Y_real[:test_seq_len]
 
 # -- fourier transfer --
 
-def time_domain_to_frequency_domain(time_tensor):
-    freq_output = list()
-    for f_i in range(len(time_tensor)):
-        freq_tensor = list()
+def time_domain_and_frequency_domain(input_tensor):
+    freq_and_time_output = list()
+    for f_i in range(len(input_tensor)):
+        freq_and_time_tensor = list()
 
         length_of_kind_list = len(pollution_kind)
         index_of_site = site_list.index(target_site)
@@ -405,26 +460,31 @@ def time_domain_to_frequency_domain(time_tensor):
                 continue
 
             freq_feature_matrix = list()
+            time_matrix = list()
 
             index_of_kind = pollution_kind.index(f_j)
             index = feature_kind_shift + index_of_kind + index_of_site * length_of_kind_list
 
-            for f_k in range(len(time_tensor[f_i])):
-                freq_feature_matrix.append(np.real(fft(time_tensor[f_i, f_k, :, index])))
+            for f_k in range(len(input_tensor[f_i])):
+                freq_feature_matrix.append(np.real(fft(input_tensor[f_i, f_k, :, index])))
+                time_matrix.append(input_tensor[f_i, f_k, :, index])
 
-            freq_tensor.append(np.array(freq_feature_matrix))
-        freq_output.append(freq_tensor)
-    return freq_output
+            freq_and_time_tensor.append(np.array(freq_feature_matrix))
+            freq_and_time_tensor.append(np.array(time_matrix))
+
+        freq_and_time_output.append(freq_and_time_tensor)
+
+    return freq_and_time_output
 
 
 start_time = time.time()
 print('fourier transfer .. ')
 print('for training data ..')
 freq_X_train = np.array(X_train)
-freq_X_train = time_domain_to_frequency_domain(freq_X_train)
+freq_X_train = time_domain_and_frequency_domain(freq_X_train)
 print('for testing data ..')
 freq_X_test = np.array(X_test)
-freq_X_test = time_domain_to_frequency_domain(freq_X_test)
+freq_X_test = time_domain_and_frequency_domain(freq_X_test)
 final_time = time.time()
 print('fourier transfer .. ok, ', end='')
 time_spent_printer(start_time, final_time)
@@ -650,6 +710,7 @@ model_input.append(Input(shape=input_shape, dtype='float32'))
 freq_high = layer2_time_steps
 freq_width = layer1_time_steps
 num_of_kind = len(pollution_kind)-1 if 'WIND_DIREC' in pollution_kind else len(pollution_kind)
+num_of_kind = num_of_kind*2  # one for frequency and one for time
 
 if K.image_data_format() == 'channels_first':
     freq_X_train = freq_X_train.reshape(freq_X_train.shape[0], num_of_kind, 1, freq_high, freq_width)
@@ -689,14 +750,26 @@ rnn_model_layer2 = concatenate(rnn_model_layer1)
 rnn_model_layer2 = Reshape((layer2_time_steps, hidden_size1))(rnn_model_layer2)
 
 rnn_model_layer2 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
-                                         gamma_initializer="one", weights=None, gamma_regularizer=None,
-                                         momentum=0.99, axis=-1)(rnn_model_layer2)
+                                      gamma_initializer="one", weights=None, gamma_regularizer=None,
+                                      momentum=0.99, axis=-1)(rnn_model_layer2)
 rnn_model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                           bias_regularizer=l2(regularizer), recurrent_dropout=recurrent_dropout)(
+                        bias_regularizer=l2(regularizer), recurrent_dropout=recurrent_dropout, return_sequences=True)(
     rnn_model_layer2)
 
 rnn_model_layer2 = Dropout(dropout)(rnn_model_layer2)
 
+# layer 3
+rnn_model_layer3 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
+                                      gamma_initializer="one", weights=None, gamma_regularizer=None,
+                                      momentum=0.99, axis=-1)(rnn_model_layer2)
+rnn_model_layer3 = LSTM(hidden_size3, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
+                        bias_regularizer=l2(regularizer), recurrent_dropout=recurrent_dropout)(
+    rnn_model_layer3)
+rnn_model_layer3 = Dropout(dropout)(rnn_model_layer3)
+
+# --
+rnn_model_layer = rnn_model_layer3
+# --
 
 # rnn 2
 h_l_ave_rnn_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
@@ -733,7 +806,7 @@ else:
 
 
 # output layer
-output_layer = concatenate([rnn_model_layer2, cnn_model_layer, h_l_ave_rnn_layer])
+output_layer = concatenate([rnn_model_layer, cnn_model_layer, h_l_ave_rnn_layer])
 
 output_layer = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero", gamma_initializer="one",
                                   weights=None, gamma_regularizer=None, momentum=0.99, axis=-1)(output_layer)
@@ -741,9 +814,11 @@ output_layer = Dense(output_size, kernel_regularizer=l2(regularizer), bias_regul
 
 
 rnn_model = Model(inputs=model_input, outputs=output_layer)
-rnn_model.compile(loss=keras.losses.mean_squared_error,
-                  optimizer='adam',
-                  metrics=['accuracy'])
+rnn_model.compile(
+    loss=keras.losses.mean_squared_error,
+    # loss=keras.losses.categorical_crossentropy,
+    optimizer='adam',
+    metrics=['accuracy'])
 
 
 final_time = time.time()
@@ -771,7 +846,7 @@ if is_training:
                   # validation_split=0.05, validation_data=None,
                   shuffle=True,
                   callbacks=[
-                      EarlyStopping(monitor='val_loss', min_delta=0, patience=3, verbose=0, mode='auto'),
+                      EarlyStopping(monitor='val_loss', min_delta=0, patience=2, verbose=0, mode='auto'),
                       ModelCheckpoint(folder + filename, monitor='val_loss', verbose=0, save_best_only=False,
                                       save_weights_only=True, mode='auto', period=1)])
 
@@ -816,7 +891,7 @@ print('rmse(rnn): %.5f' % (np.mean((np.atleast_2d(Y_test).T - pred)**2, 0)**0.5)
 # --
 
 
-def plotting(data, filename, grid=[24, 10], save=False, show=False, collor=['mediumaquamarine', 'pink', 'gray']):
+def plotting(data, filename, grid=[24, 10], save=False, show=False, collor=['mediumaquamarine', 'pink', 'lavender']):
     if len(grid) != 2:
         print('len(grid) must equal to 2')
     for i in range(len(data)):
@@ -832,7 +907,9 @@ def plotting(data, filename, grid=[24, 10], save=False, show=False, collor=['med
     if show:
         plt.show()
 
-plotting([Y_test, pred], filename + '.png', save=True, show=True)
+# -- testing --
+
+plotting([Y_test, pred, Y_real], filename + '.png', grid=plot_grid, save=True, show=True)
 
 # -- frequency --
 
@@ -861,6 +938,7 @@ train_pred_target = Y_train[-800:]
 
 # train_pred = mean_y_train + std_y_train * train_pred
 # train_pred_target = mean_y_train + std_y_train * train_pred_target
+train_pred = [np.argmax(train_pred[i])+1 for i in range(len(train_pred))]
 
-plotting([train_pred_target, train_pred], 'train.png', save=True, show=True)
+plotting([train_pred_target, train_pred], 'train.png', grid=plot_grid, save=True, show=True)
 
