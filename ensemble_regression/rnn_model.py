@@ -79,7 +79,7 @@ testing_duration = ['1/1', '1/31']
 interval_hours = 12  # predict the label of average data of many hours later, default is 1
 is_training = True  # True False
 
-degree = 2
+degree = 6
 
 plot_grid = [interval_hours, 10]
 
@@ -144,13 +144,13 @@ layer2_time_steps = 14  # how many days
 
 # rnn
 hidden_size1 = 16
-hidden_size2 = 64
-hidden_size3 = 32
+hidden_size2 = 32
+# hidden_size3 = 32
 
 # cnn
 kernel_num_1 = 8
-kernel_num_2 = 32
-cnn_hidden_size1 = 16
+kernel_num_2 = 16
+cnn_hidden_size1 = 8
 
 output_size = 1
 
@@ -754,22 +754,22 @@ rnn_model_layer2 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta
                                       gamma_initializer="one", weights=None, gamma_regularizer=None,
                                       momentum=0.99, axis=-1)(rnn_model_layer2)
 rnn_model_layer2 = LSTM(hidden_size2, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                        bias_regularizer=l2(regularizer), recurrent_dropout=recurrent_dropout, return_sequences=True)(
+                        bias_regularizer=l2(regularizer), recurrent_dropout=recurrent_dropout)(
     rnn_model_layer2)
 
 rnn_model_layer2 = Dropout(dropout)(rnn_model_layer2)
 
 # layer 3
-rnn_model_layer3 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
-                                      gamma_initializer="one", weights=None, gamma_regularizer=None,
-                                      momentum=0.99, axis=-1)(rnn_model_layer2)
-rnn_model_layer3 = LSTM(hidden_size3, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
-                        bias_regularizer=l2(regularizer), recurrent_dropout=recurrent_dropout)(
-    rnn_model_layer3)
-rnn_model_layer3 = Dropout(dropout)(rnn_model_layer3)
+# rnn_model_layer3 = BatchNormalization(beta_regularizer=None, epsilon=0.001, beta_initializer="zero",
+#                                       gamma_initializer="one", weights=None, gamma_regularizer=None,
+#                                       momentum=0.99, axis=-1)(rnn_model_layer2)
+# rnn_model_layer3 = LSTM(hidden_size3, kernel_regularizer=l2(regularizer), recurrent_regularizer=l2(regularizer),
+#                         bias_regularizer=l2(regularizer), recurrent_dropout=recurrent_dropout)(
+#     rnn_model_layer3)
+# rnn_model_layer3 = Dropout(dropout)(rnn_model_layer3)
 
 # --
-rnn_model_layer = rnn_model_layer3
+rnn_model_layer = rnn_model_layer2
 # --
 
 # rnn 2
