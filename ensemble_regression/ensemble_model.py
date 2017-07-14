@@ -761,5 +761,7 @@ def plotting(data, filename, grid=[24, 10], save=False, show=False, collor=['med
 #     target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), dpi=100)
 
 # -- testing --
-
+filename = 'ens_%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.png' % (
+    target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0],
+    testing_month, interval_hours)
 plotting([Y_test, predictions, Y_real], filename + '.png', grid=plot_grid, save=True, show=True)
